@@ -1,0 +1,7 @@
+# requirements.txt
+# Dependencias iniciales para SSD Curricular
+pandas
+pyyaml
+numpy
+scikit-learn
+uuid

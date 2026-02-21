@@ -1,0 +1,14 @@
+# model_config.yaml
+version_modelo: 1.0
+riesgos:
+  internos:
+    - archivo: riesgos_internos.csv
+      columnas: [desempeño, repitencia, deserción]
+  externos:
+    - archivo: riesgos_externos.csv
+      columnas: [empleabilidad, satisfacción]
+carreras:
+  - id: 101
+    nombre: Ingenieria Civil
+  - id: 102
+    nombre: Medicina
