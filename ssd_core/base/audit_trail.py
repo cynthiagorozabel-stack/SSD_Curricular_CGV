@@ -4,6 +4,7 @@ import uuid
 import json
 import time
 import hashlib
+import os
 
 class AuditTrail:
     def __init__(self, output_dir):
@@ -20,6 +21,8 @@ class AuditTrail:
             'hash_datos_entrada': data_hash,
             'carrera_id': carrera_id
         }
+        # Asegura que el directorio existe
+        os.makedirs(self.output_dir, exist_ok=True)
         file_path = os.path.join(self.output_dir, f'audit_{run_id}.json')
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(audit_data, f, indent=2)

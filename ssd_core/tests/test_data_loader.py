@@ -1,6 +1,6 @@
 # test_data_loader.py
 import unittest
-from base.data_loader import DataLoader
+from ssd_core.base.data_loader import DataLoader
 import os
 
 class TestDataLoader(unittest.TestCase):

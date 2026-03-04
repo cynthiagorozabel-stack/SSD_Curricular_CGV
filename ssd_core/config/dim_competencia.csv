@@ -1,0 +1,13 @@
+ID_Competencia,Nombre_Competencia,ID_RA,Peso_RA_en_Competencia,Descripcion_Enfoque,Fecha_recoleccion,Fecha_carga
+C1,Ingenieria e Innovacion,RA1,0.30,Resolucion de problemas tecnicos,2026-03-02,2026-03-02
+C1,Ingenieria e Innovacion,RA2,0.10,Contexto de la practica profesional,2026-03-02,2026-03-02
+C1,Ingenieria e Innovacion,RA9,0.20,Investigacion e innovacion,2026-03-02,2026-03-02
+C1,Ingenieria e Innovacion,RA10,0.15,Experimentacion y datos,2026-03-02,2026-03-02
+C1,Ingenieria e Innovacion,RA12,0.25,Diseño y administracion de sistemas,2026-03-02,2026-03-02
+C2,Gestion y Liderazgo,RA3,0.40,Trabajo en equipo y coordinacion,2026-03-02,2026-03-02
+C2,Gestion y Liderazgo,RA5,0.25,Comunicacion efectiva,2026-03-02,2026-03-02
+C2,Gestion y Liderazgo,RA7,0.35,Gestion de proyectos y riesgos,2026-03-02,2026-03-02
+C3,Responsabilidad y Etica,RA4,0.25,Impacto social y ambiental,2026-03-02,2026-03-02
+C3,Responsabilidad y Etica,RA6,0.25,Etica y cumplimiento de normas,2026-03-02,2026-03-02
+C3,Responsabilidad y Etica,RA8,0.20,Aprendizaje continuo y autonomo,2026-03-02,2026-03-02
+C3,Responsabilidad y Etica,RA11,0.30,Analisis de impacto local y global,2026-03-02,2026-03-02

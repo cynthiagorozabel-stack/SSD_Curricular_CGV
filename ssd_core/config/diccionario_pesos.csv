@@ -1,0 +1,18 @@
+# Diccionario de Pesos Jerárquicos
+# Nivel Micro: Asignatura -> RA
+# Formato: ID_asignatura;Nombre_asignatura;ID_RA;Peso_RA_en_asignatura
+1;Investigación Operativa;RA1;0.7
+1;Investigación Operativa;RA7;0.3
+2;Gestión de Proyectos;RA7;1.0
+3;Relaciones Industriales;RA3;1.0
+4;Comunicación;RA5;1.0
+# Nivel Medio: RA -> Competencia
+# Formato: ID_RA;ID_competencia;Peso_RA_en_competencia
+RA3;C2;0.5
+RA5;C2;0.2
+RA7;C2;0.3
+# Nivel Macro: Competencia -> Perfil
+# Formato: ID_competencia;Peso_competencia_en_perfil
+C1;0.4
+C2;0.3
+C3;0.3

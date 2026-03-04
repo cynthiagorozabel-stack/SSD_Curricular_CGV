@@ -1,6 +1,6 @@
 # test_audit_trail.py
 import unittest
-from base.audit_trail import AuditTrail
+from ssd_core.base.audit_trail import AuditTrail
 import os
 
 class TestAuditTrail(unittest.TestCase):

@@ -1,0 +1,11 @@
+ID_Variable,Descripcion,Ubicacion,Usos,Ejemplo_ID,Logica_ID
+MATRIC, Número de matrícula del estudiante, matriculacion_historica.csv, Identificación única de estudiante, M1234, M + 4 números
+CARRI, ID de la carrera, dim_asignatura.csv, carreras.csv, Relación de asignatura y carrera, C001A, C + 3 números + letra facultad
+ASIGN, ID de la asignatura, dim_asignatura.csv, Identificación de materia, A12B3, A + 2 números + letra + número
+NIVEL, Nivel académico, dim_asignatura.csv, Clasificación por semestre, N01S, N + 2 números + letra semestre
+RAIDA, ID de resultado de aprendizaje, dim_asignatura.csv, dim_ra.csv, Evaluación de aprendizaje, R1A23, R + número + letra + 2 números
+PESRA, Peso del RA en la asignatura, dim_asignatura.csv, Ponderación jerárquica, P1000, P + 4 números (decimal sin punto)
+FEELA, Fecha de elaboración de datos, dim_asignatura.csv, dim_ra.csv, dim_competencia.csv, Trazabilidad, F2201, F + año(2) + mes(2)
+FECAR, Fecha de carga de datos, dim_asignatura.csv, dim_ra.csv, dim_competencia.csv, Trazabilidad, F2202, F + año(2) + mes(2)
+NOTAA, Calificación del estudiante, matriculacion_historica.csv, Evaluación de desempeño, N0850, N + 4 números (decimal sin punto)
+PERIO, Periodo académico, matriculacion_historica.csv, Trazabilidad temporal, O2211, O + año(2) + periodo(2)
