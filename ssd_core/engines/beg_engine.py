@@ -1,10 +1,8 @@
-# beg_engine.py
-# Motor de cálculo de brecha estructural de egreso (BEG)
+# NOTA: El cálculo robusto de BEG está implementado en main.py
+# Este motor solo se mantiene para compatibilidad mínima.
 
 class BEGEngine:
-	def __init__(self, data):
-		self.data = data
-
-	def calculate(self):
-		# Placeholder: cálculo de BEG
-		return {'BEG': 0.0}
+    def __init__(self, *args, **kwargs):
+        pass
+    def calculate(self, *args, **kwargs):
+        raise NotImplementedError('BEGEngine está obsoleto. Usar main.py para el cálculo de BEG.')

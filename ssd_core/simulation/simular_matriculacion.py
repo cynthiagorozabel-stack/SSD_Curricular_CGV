@@ -1,4 +1,26 @@
 
+NIVELES = [
+    'PRIMER', 'SEGUNDO', 'TERCERO', 'CUARTO', 'QUINTO', 'SEXTO', 'SEPTIMO', 'OCTAVO', 'NOVENO'
+]
+MATERIAS_NIVEL = {
+    'PRIMER': ['COMLV', 'INTII', 'QUIG1', 'DIBT1', 'CALV1', 'ALGL1'],
+    'SEGUNDO': ['CALV2', 'DICAD', 'QUIG2', 'FISI1', 'EMTR1', 'IINVC'],
+    'TERCERO': ['EMTR2', 'FISI2', 'TEMAT', 'EDIFE', 'CALNU', 'PROGR'],
+    'CUARTO': ['EDVAL', 'RESEC', 'REMAT', 'TERMO', 'MECFL', 'INMET'],
+    'QUINTO': ['ERGON', 'INVOP', 'PREST', 'INDMM', 'INMER', 'MATFI'],
+    'SEXTO': ['COPRO', 'GECAL', 'LOGCS', 'OPUNI', 'PPP01', 'SHIN1', 'VINC1'],
+    'SEPTIMO': ['AUTOM', 'GESAM', 'GEMAN', 'PPP02', 'PRIN1', 'SHIN2', 'VINC2'],
+    'OCTAVO': ['FEPRO', 'INPR1', 'PPP03', 'PRIN2', 'SETIT', 'SIMOP'],
+    'NOVENO': ['DETIT', 'DIPLA', 'GEEMP', 'INPR2', 'RELIN']
+}
+ANIOS = list(range(2010, 2016))
+GENERO = ['M', 'F']
+ESTADOS = ['Alto', 'Medio', 'Bajo']
+PERIODOS = [1, 2]
+MIN_APROBADO = 70
+ID_CARRERA = 'INGIND1719'
+CARRERA = 'INGENIERIA INDUSTRIAL'
+
 if __name__ == "__main__":
     import subprocess
     import os
@@ -6,34 +28,14 @@ if __name__ == "__main__":
     import csv
     from datetime import datetime
     import pandas as pd
+    import numpy as np
+    import uuid
 
     N_ESTUDIANTES_POR_COHORTE = 30  # Puedes ajustar este número
-    PERIODOS = ['1', '2']
-    CARRERA = 'INGENIERIA INDUSTRIAL'
-    ID_CARRERA = 'INGIND1719'  # Código homologado de la malla
-    ANIOS = list(range(2016, 2026))  # Últimos 10 años
-    # LUGARES eliminado: solo se usa Urbano/Rural
-    ESTADOS = ['Alto', 'Medio', 'Bajo']
-    GENERO = ['M', 'F']
-    MIN_APROBADO = 70
-    MAX_REPROBADO = 2
-    MAX_REPROBADO_FINAL = 3
 
-    # Leer niveles y materias desde asignaturas.csv (separado por coma)
-    asig_path = 'ssd_core/config/asignaturas.csv'
-    df_asig = pd.read_csv(asig_path, sep=',')
-    df_asig['NIVEL'] = df_asig['NIVEL'].str.strip().str.upper()
-    NIVELES = df_asig['NIVEL'].unique().tolist()
-    # MATERIAS_NIVEL: diccionario {nivel: [cod_asignatura, ...]} agrupando materias por nivel
-    MATERIAS_NIVEL = {nivel: df_asig[df_asig['NIVEL'] == nivel]['COD_ASIGNATURA'].tolist() for nivel in NIVELES}
-    # Diccionario para obtener RA por materia
-    RA_MATERIA = dict(zip(df_asig['COD_ASIGNATURA'], df_asig['RA']))
-    print(f"[DEBUG] NIVELES: {NIVELES}")
-    print(f"[DEBUG] MATERIAS_NIVEL: {MATERIAS_NIVEL}")
 
     print(f"[DEBUG] NIVELES: {NIVELES}")
     print(f"[DEBUG] MATERIAS_NIVEL: {MATERIAS_NIVEL}")
-
     os.makedirs('ssd_core/config', exist_ok=True)
 
 
@@ -61,6 +63,8 @@ if __name__ == "__main__":
             import string
             letras = ''.join(random.choices(string.ascii_uppercase, k=3))
             digitos = ''.join(random.choices('0123456789', k=4))
+            # Asignar periodo de ingreso realista: O{anio}-1 (primer periodo del año)
+            periodo_ingreso = f"O{anio}-1"
             id_est = f"E{anio}{letras}{digitos}"
             estudiantes.append({
                 'ID_EST': id_est,
@@ -75,7 +79,9 @@ if __name__ == "__main__":
                 'Abandono': 0,
                 'materias': materias_dict,
                 'Abandono_nivel': abandono_nivel,
-                'Cohorte': anio
+                'Cohorte': periodo_ingreso,
+                'Anio_Ingreso': anio,
+                'Periodo_Ingreso': periodo_ingreso
             })
 
     # Usar solo rutas y códigos preexistentes
@@ -91,7 +97,7 @@ if __name__ == "__main__":
             print(f"[DEBUG] Archivo abierto para escritura.")
             writer = csv.writer(f)
             writer.writerow([
-                'Periodo','Fecha_matriculacion','Fecha_carga','ID_EST','Nombre','Edad','Genero','Lugar_procedencia','ID_carrera','Carrera','Estado_sociocultural','Brecha_aprovechamiento','Nivel','Materia','Nota','Abandono'
+                'Periodo','Fecha_matriculacion','Fecha_carga','ID_EST','Nombre','Edad','Genero','Lugar_procedencia','ID_carrera','Carrera','Estado_sociocultural','Brecha_aprovechamiento','Nivel','Materia','Nota','Abandono','ID_Cohorte'
             ])
             print(f"[DEBUG] Encabezado escrito.")
             total_rows = 0
@@ -99,24 +105,24 @@ if __name__ == "__main__":
                 print(f"[DEBUG] Procesando estudiante: {est['ID_EST']}")
                 abandonado = 0
                 abandono_nivel = est.get('Abandono_nivel')
-                cohorte = est.get('Cohorte', 2022)
-                # Simular avance histórico: cada año, el estudiante cursa los niveles correspondientes
+                cohorte = est.get('Anio_Ingreso', 2022)
+                # Si la cohorte es la más reciente, solo simular hasta OCTAVO nivel
+                max_nivel = 'OCTAVO' if cohorte == max(ANIOS) else 'NOVENO'
                 for anio_curso in range(cohorte, 2026):
-                    # El estudiante solo avanza si no ha abandonado
                     if abandonado:
                         break
                     for nivel in NIVELES:
+                        if max_nivel == 'OCTAVO' and nivel == 'NOVENO':
+                            continue
                         for periodo in PERIODOS:
                             periodo_id = f'{nivel}-{periodo}'
                             fecha_matriculacion = f'{anio_curso}-{periodo}-01'
                             fecha_carga = datetime.now().strftime('%Y-%m-%d')
                             for materia in MATERIAS_NIVEL[nivel]:
-                                # Si el estudiante debe abandonar en este nivel, marcar abandono y dejar NA en adelante
                                 if abandono_nivel and nivel == abandono_nivel:
                                     abandonado = 1
                                     est['Abandono'] = 1
                                 if not abandonado:
-                                    # Simular repitencia: si reprobó antes, puede volver a cursar
                                     nota = random.randint(50, 100)
                                     try:
                                         est['materias'][nivel][materia]['aprobado'] = nota >= MIN_APROBADO
@@ -124,14 +130,8 @@ if __name__ == "__main__":
                                     except KeyError:
                                         print(f"[ERROR] KeyError: nivel={nivel}, materia={materia}, materias_dict={est['materias']}")
                                         continue
-                                    # Homologar PERIODO: O{anio_curso}-{periodo}
-                                    periodo_homologado = f"O{anio_curso}-{periodo}"
-                                    # Homologar ID_ASIG: COD_ASIGNATURA
-                                    id_asig = materia
-                                    # Homologar RA
-                                    ra = RA_MATERIA.get(materia, '')
                                     writer.writerow([
-                                        periodo_homologado,
+                                        f"O{anio_curso}-{periodo}",
                                         fecha_matriculacion,
                                         fecha_carga,
                                         est['ID_EST'],
@@ -144,16 +144,14 @@ if __name__ == "__main__":
                                         est['Estado_sociocultural'],
                                         est['Brecha_aprovechamiento'],
                                         nivel,
-                                        id_asig,
+                                        materia,
                                         nota,
-                                        est['Abandono']
+                                        est['Abandono'],
+                                        est['Cohorte']
                                     ])
                                 else:
-                                    periodo_homologado = f"O{anio_curso}-{periodo}"
-                                    id_asig = materia
-                                    ra = RA_MATERIA.get(materia, '')
                                     writer.writerow([
-                                        periodo_homologado,
+                                        f"O{anio_curso}-{periodo}",
                                         fecha_matriculacion,
                                         fecha_carga,
                                         est['ID_EST'],
@@ -166,19 +164,45 @@ if __name__ == "__main__":
                                         est['Estado_sociocultural'],
                                         est['Brecha_aprovechamiento'],
                                         nivel,
-                                        id_asig,
+                                        materia,
                                         'NA',
-                                        est['Abandono']
+                                        est['Abandono'],
+                                        est['Cohorte']
                                     ])
                                 total_rows += 1
+
+            f.flush()
+            print(f"[DEBUG] Total rows written: {total_rows}")
+            print(f"[DEBUG] File closed: {f.closed}")
             f.flush()
             print(f"[DEBUG] Total rows written: {total_rows}")
             print(f"[DEBUG] File closed: {f.closed}")
     except Exception as e:
         print(f"[ERROR] Excepción al abrir o escribir el archivo: {e}")
 
-    # Al finalizar la simulación de matrícula, simular riesgos internos y externos
-    # subprocess.run([
-    #     'C:/Users/LENOVO/Documents/Maestria_tesis/SSD_CGV_V2/venv/Scripts/python.exe',
-    #     'ssd_core/simulation/simular_riesgos.py'
-    # ])
+
+    # Al finalizar la simulación de matrícula, simular riesgos externos para graduados (nivel máximo alcanzado = NOVENO) y exportar con nombre fijo
+    try:
+        df_matric = pd.read_csv(output_path)
+        graduados = df_matric[(df_matric['Nivel'].str.upper() == 'NOVENO') & (df_matric['Nota'] != 'NA')]['ID_EST'].unique()
+        print(f"[DEBUG] Primeros ID_EST de graduados: {graduados[:5]}")
+        riesgos_externos = []
+        fecha_hoy = datetime.now().strftime('%Y-%m-%d')
+        for eid in graduados:
+            empleabilidad = np.clip(np.random.normal(0.8, 0.1), 0, 1)
+            satisfaccion = np.clip(np.random.normal(0.75, 0.12), 0, 1)
+            riesgos_externos.append({
+                'Periodo': '2026-1',
+                'Fecha_recoleccion': fecha_hoy,
+                'Fecha_carga': fecha_hoy,
+                'estudiante_id': eid,
+                'empleabilidad': round(empleabilidad, 2),
+                'satisfacción': round(satisfaccion, 2)
+            })
+        df_riesgos_ext = pd.DataFrame(riesgos_externos)
+        os.makedirs('ssd_core/config', exist_ok=True)
+        riesgos_ext_path = os.path.join('ssd_core', 'config', 'riesgos_externos.csv')
+        df_riesgos_ext.to_csv(riesgos_ext_path, index=False)
+        print(f"[DEBUG] Riesgos externos simulados exportados a: {riesgos_ext_path}")
+    except Exception as e:
+        print(f"[ERROR] Error al generar riesgos externos: {e}")
