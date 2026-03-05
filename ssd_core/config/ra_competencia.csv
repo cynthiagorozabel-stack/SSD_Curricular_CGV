@@ -1,4 +1,4 @@
-ra_id,competencia_id,valor_minimo,Fecha_recoleccion,Fecha_carga
+ra_id,ID_COMP,valor_minimo,Fecha_recoleccion,Fecha_carga
 RA1,C1,0.7,2026-03-02,2026-03-02
 RA2,C1,0.7,2026-03-02,2026-03-02
 RA9,C1,0.7,2026-03-02,2026-03-02

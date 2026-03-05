@@ -36,7 +36,11 @@ def main(carrera_id):
     config = config_loader.load()
     config_loader.validate()
     ra_data = DataLoader(ra_path).load()
+    if 'competencia_id' in ra_data.columns:
+        ra_data = ra_data.rename(columns={'competencia_id': 'ID_COMP'})
     competencia_data = DataLoader(competencia_path).load()
+    if 'ID_Competencia' in competencia_data.columns:
+        competencia_data = competencia_data.rename(columns={'ID_Competencia': 'ID_COMP'})
     perfil_data = DataLoader(perfil_path).load()
     riesgos_internos = DataLoader(riesgos_internos_path).load()
     # Homologar columna ID_EST en riesgos_internos
@@ -81,6 +85,7 @@ def main(carrera_id):
     comp_perfil = pd.read_csv('ssd_core/config/competencia_perfil.csv')
     # Homologar columnas de ID
     matric = matric.rename(columns={'Estudiante_ID':'ID_EST'})
+    comp_perfil = comp_perfil.rename(columns={'competencia_id': 'ID_COMP'})
     # Mapear materias a RA
     materia_ra = asig.set_index('COD_ASIGNATURA')['RA'].to_dict()
     matric['RA'] = matric['Materia'].map(materia_ra)
@@ -95,7 +100,7 @@ def main(carrera_id):
     comp_logro = []
     for est in ra_logro['ID_EST'].unique():
         est_ra = ra_logro[ra_logro['ID_EST']==est]
-        for comp in comp_perfil['competencia_id'].unique():
+        for comp in comp_perfil['ID_COMP'].unique():
             # Buscar todos los RA asociados a esta competencia
             ra_asociados = asig[(asig['RA'].notnull()) & (asig['RA'].str.startswith('RA')) & (asig['RA'].isin(est_ra['RA']))]['RA'].unique().tolist()
             ra_vals = est_ra[est_ra['RA'].isin(ra_asociados)]['Logro_RA']
@@ -112,7 +117,7 @@ def main(carrera_id):
         est_comp = comp_logro[comp_logro['ID_EST']==est]
         id_cohorte = primer_periodo.get(est, '')
         for perfil in comp_perfil['perfil_id'].unique():
-            compas = comp_perfil[comp_perfil['perfil_id']==perfil]['competencia_id']
+            compas = comp_perfil[comp_perfil['perfil_id']==perfil]['ID_COMP']
             vals = est_comp[est_comp['ID_COMP'].isin(compas)]['Logro_Competencia']
             if not vals.empty:
                 perfil_logro.append({
@@ -265,7 +270,7 @@ def main(carrera_id):
             'periodo': periodo,
             'cohorte': cohorte,
             'ID_EST': row.get('ID_EST', row.get('estudiante_id', 'NA')),
-            'ID_COMP': row.get('ID_COMP', row.get('competencia_id', 'NA')) if ('ID_COMP' in row or 'competencia_id' in row) else 'NA',
+            'ID_COMP': row.get('ID_COMP', 'NA'),
             'ID_PERFIL': row.get('ID_PERFIL', row.get('perfil_id', 'NA')) if ('ID_PERFIL' in row or 'perfil_id' in row) else 'NA',
             'valor': row.get('valor_minimo', 'NA'),
             'fuente': 'ra_competencia.csv',

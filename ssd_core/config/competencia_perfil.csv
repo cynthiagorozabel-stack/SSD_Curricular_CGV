@@ -1,4 +1,4 @@
-perfil_id,competencia_id,peso,Fecha_recoleccion,Fecha_carga
+perfil_id,ID_COMP,peso,Fecha_recoleccion,Fecha_carga
 P1,C1,0.33,2026-03-03,2026-03-03
 P1,C2,0.33,2026-03-03,2026-03-03
 P1,C3,0.34,2026-03-03,2026-03-03
