@@ -39,6 +39,15 @@ def main(carrera_id):
     competencia_data = DataLoader(competencia_path).load()
     perfil_data = DataLoader(perfil_path).load()
     riesgos_internos = DataLoader(riesgos_internos_path).load()
+    # Homologar columna ID_EST en riesgos_internos
+    if 'estudiante_id' in riesgos_internos.columns and 'ID_EST' not in riesgos_internos.columns:
+        riesgos_internos['ID_EST'] = riesgos_internos['estudiante_id']
+    # Si no existe ninguna, intentar poblarla desde riesgos_int_export si es posible
+    if 'ID_EST' not in riesgos_internos.columns and 'ID_EST' in locals() and not riesgos_int_export.empty:
+        riesgos_internos = riesgos_internos.assign(ID_EST=riesgos_int_export['ID_EST'])
+    # Si aún no existe, poner NA
+    if 'ID_EST' not in riesgos_internos.columns:
+        riesgos_internos['ID_EST'] = 'NA'
     riesgos_externos = DataLoader(riesgos_externos_path).load()
 
     # Engines
@@ -163,6 +172,13 @@ def main(carrera_id):
         full_matrix['Logro_Perfil'] = perfil_logro_idx['Logro_Perfil']
     if 'ID_PERFIL' in perfil_logro_idx.columns:
         full_matrix['ID_PERFIL'] = perfil_logro_idx['ID_PERFIL']
+    # Agregar columnas de logros por competencia para cada estudiante
+    if not comp_logro.empty:
+        comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
+        # Renombrar columnas para que sean claras (por ejemplo: COMP_<ID_COMP>)
+        comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
+        # Unir con la matriz principal
+        full_matrix = full_matrix.join(comp_matrix, how='left')
     # Periodo y fechas (usamos la última fecha de corte de cada estudiante)
     if 'Fecha_corte' in perfil_logro_idx.columns:
         full_matrix['Fecha_corte'] = perfil_logro_idx['Fecha_corte']
@@ -183,6 +199,25 @@ def main(carrera_id):
     else:
         alpha = None
         montecarlo = None
+
+    # Exportar alpha de Cronbach con trazabilidad directamente desde aquí
+    try:
+        pipeline_name = "main_pipeline"  # Cambia esto si tu pipeline tiene otro nombre
+        if alpha is not None and run_id is not None:
+            import json
+            from datetime import datetime
+            data = {
+                "run_id": run_id,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "pipeline": pipeline_name,
+                "alpha_cronbach": alpha
+            }
+            out_path = os.path.join("export", f"alpha_cronbach_{run_id}.json")
+            with open(out_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            print(f"Exportado: {out_path}")
+    except Exception as e:
+        print(f"[WARN] No se pudo exportar alpha_cronbach automáticamente: {e}")
 
     # Exportar riesgos externos individuales (estudiante x riesgo)
     # Buscar el archivo de riesgos externos con el run_id actual
