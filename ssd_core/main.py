@@ -83,12 +83,12 @@ def main(carrera_id):
     matric = pd.read_csv('ssd_core/config/matriculacion_historica_test.csv')
     asig = pd.read_csv('ssd_core/config/asignaturas.csv')
     comp_perfil = pd.read_csv('ssd_core/config/competencia_perfil.csv')
-    # Homologar columnas de ID
-    matric = matric.rename(columns={'Estudiante_ID':'ID_EST'})
+    # Homologar columnas de ID y asignaturas
+    matric = matric.rename(columns={'Estudiante_ID':'ID_EST', 'Materia':'COD_ASIGNATURA'})
     comp_perfil = comp_perfil.rename(columns={'competencia_id': 'ID_COMP'})
     # Mapear materias a RA
     materia_ra = asig.set_index('COD_ASIGNATURA')['RA'].to_dict()
-    matric['RA'] = matric['Materia'].map(materia_ra)
+    matric['RA'] = matric['COD_ASIGNATURA'].map(materia_ra)
     # Filtrar solo filas con RA válido y nota numérica
     matric = matric[matric['RA'].notnull() & matric['Nota'].apply(lambda x: str(x).replace('.','',1).isdigit())]
     matric['Nota'] = matric['Nota'].astype(float)
@@ -96,6 +96,9 @@ def main(carrera_id):
     ra_logro = matric.groupby(['ID_EST','RA']).agg({'Nota':'mean'}).reset_index()
     ra_logro = ra_logro.rename(columns={'Nota':'Logro_RA'})
     ra_logro['Fecha_corte'] = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+    # Agregar ID_Cohorte a ra_logro
+    id_cohorte_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict()
+    ra_logro['ID_Cohorte'] = ra_logro['ID_EST'].map(id_cohorte_map)
     # Calcular logro de competencia por estudiante
     comp_logro = []
     for est in ra_logro['ID_EST'].unique():
@@ -105,38 +108,62 @@ def main(carrera_id):
             ra_asociados = asig[(asig['RA'].notnull()) & (asig['RA'].str.startswith('RA')) & (asig['RA'].isin(est_ra['RA']))]['RA'].unique().tolist()
             ra_vals = est_ra[est_ra['RA'].isin(ra_asociados)]['Logro_RA']
             if not ra_vals.empty:
-                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')})
+                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Cohorte': id_cohorte_map.get(est, '')})
     comp_logro = pd.DataFrame(comp_logro)
-    # Calcular perfil por estudiante (suma ponderada de competencias)
-    # Primero, asignar ID_Cohorte a cada estudiante usando su primer periodo de ingreso
-    # Extraer periodo de ingreso real desde matriculacion_historica_test.csv
-    primer_periodo = matric.groupby('ID_EST')['Periodo'].first().to_dict()
-    # Calcular perfil y asignar cohorte
+    # Calcular perfil por estudiante y periodo (suma ponderada de competencias)
+    # Extraer nivel y periodo desde matriculacion_historica_test.csv
     perfil_logro = []
-    for est in comp_logro['ID_EST'].unique():
-        est_comp = comp_logro[comp_logro['ID_EST']==est]
-        id_cohorte = primer_periodo.get(est, '')
+    for (est, periodo), grupo_m in matric.groupby(['ID_EST', 'Periodo']):
+        nivel = grupo_m['Nivel'].iloc[0] if 'Nivel' in grupo_m.columns else ''
+        id_cohorte = grupo_m['ID_Cohorte'].iloc[0] if 'ID_Cohorte' in grupo_m.columns else ''
+        # Calcular logros de competencia para este estudiante y periodo
+        est_comp = comp_logro[comp_logro['ID_EST'] == est]
         for perfil in comp_perfil['perfil_id'].unique():
-            compas = comp_perfil[comp_perfil['perfil_id']==perfil]['ID_COMP']
+            compas = comp_perfil[comp_perfil['perfil_id'] == perfil]['ID_COMP']
             vals = est_comp[est_comp['ID_COMP'].isin(compas)]['Logro_Competencia']
             if not vals.empty:
                 perfil_logro.append({
-                    'ID_EST':est,
-                    'ID_PERFIL':perfil,
-                    'Logro_Perfil':vals.mean(),
-                    'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
-                    'ID_Cohorte':id_cohorte
+                    'ID_EST': est,
+                    'ID_PERFIL': perfil,
+                    'Periodo': periodo,
+                    'Nivel': nivel,
+                    'ID_Cohorte': id_cohorte,
+                    'Logro_Perfil': vals.mean(),
+                    'Fecha_corte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
                 })
     perfil_logro = pd.DataFrame(perfil_logro)
-    # Calcular riesgos internos individuales desde el historial de matrícula
-    # Desempeño: promedio de notas válidas
-    # Repitencia: materias con más de una nota registrada
-    # Deserción: suma de Abandono==1
+
+    # Calcular PERFIL_Promedio único por estudiante: solo el último periodo y nivel más alto
+    if not perfil_logro.empty:
+        # Tomar solo el último periodo por estudiante
+        perfil_logro['Periodo_orden'] = perfil_logro['Periodo'].astype(str)
+        perfil_logro = perfil_logro.sort_values(['ID_EST', 'Periodo_orden'])
+        last_period = perfil_logro.groupby('ID_EST')['Periodo_orden'].transform('max')
+        perfil_logro_last = perfil_logro[perfil_logro['Periodo_orden'] == last_period]
+        # Calcular el promedio de Logro_Perfil en el último periodo
+        perfil_promedio = perfil_logro_last.groupby('ID_EST').agg({
+            'Logro_Perfil': 'mean',
+            'Nivel': lambda x: x.iloc[-1],
+            'ID_Cohorte': 'first',
+            'Periodo': 'first',
+            'Fecha_corte': 'first'
+        }).reset_index().rename(columns={'Logro_Perfil': 'PERFIL_Promedio'})
+    else:
+        perfil_promedio = pd.DataFrame()
+    # Calcular riesgos internos individuales solo para datos de los últimos dos años
+    from datetime import datetime, timedelta
     def safe_float(x):
         try:
             return float(x)
         except:
             return np.nan
+    # Convertir Fecha_carga a datetime
+    if 'Fecha_carga' in matric.columns:
+        matric['Fecha_carga_dt'] = pd.to_datetime(matric['Fecha_carga'], errors='coerce')
+        fecha_max = matric['Fecha_carga_dt'].max()
+        if pd.notnull(fecha_max):
+            fecha_limite = fecha_max - pd.DateOffset(years=2)
+            matric = matric[matric['Fecha_carga_dt'] >= fecha_limite]
     matric['Nota_num'] = matric['Nota'].apply(safe_float)
     riesgos_calc = []
     for est, grupo in matric.groupby('ID_EST'):
@@ -151,6 +178,8 @@ def main(carrera_id):
     ra_logro.to_csv('export/ra_logro_individual.csv', index=False)
     comp_logro.to_csv('export/competencia_logro_individual.csv', index=False)
     perfil_logro.to_csv('export/perfil_logro_individual.csv', index=False)
+    if not perfil_promedio.empty:
+        perfil_promedio.to_csv('export/perfil_promedio_individual.csv', index=False)
     # Sobrescribir riesgos internos individuales siempre
     # Añadir trazabilidad a riesgos internos: ID_Cohorte y Fecha_corte
     if not perfil_logro.empty:
@@ -168,30 +197,43 @@ def main(carrera_id):
     # Agregar desempeño, repitencia, deserción, perfil, periodo, fechas
     # Desempeño, repitencia, deserción ya calculados en riesgos_int_export
     perfil_logro_idx = perfil_logro.set_index('ID_EST') if 'ID_EST' in perfil_logro.columns else pd.DataFrame()
-    # Unir todo
-    full_matrix = ra_matrix.copy()
-    for col in ['desempeño','repitencia','deserción']:
-        if col in riesgos_int_export.set_index('ID_EST').columns:
-            full_matrix[col] = riesgos_int_export.set_index('ID_EST')[col]
-    if 'Logro_Perfil' in perfil_logro_idx.columns:
-        full_matrix['Logro_Perfil'] = perfil_logro_idx['Logro_Perfil']
-    if 'ID_PERFIL' in perfil_logro_idx.columns:
-        full_matrix['ID_PERFIL'] = perfil_logro_idx['ID_PERFIL']
-    # Agregar columnas de logros por competencia para cada estudiante
-    if not comp_logro.empty:
-        comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
-        # Renombrar columnas para que sean claras (por ejemplo: COMP_<ID_COMP>)
-        comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
-        # Unir con la matriz principal
-        full_matrix = full_matrix.join(comp_matrix, how='left')
-    # Periodo y fechas (usamos la última fecha de corte de cada estudiante)
-    if 'Fecha_corte' in perfil_logro_idx.columns:
-        full_matrix['Fecha_corte'] = perfil_logro_idx['Fecha_corte']
-    # Reset index para tener ID_EST como columna
-    full_matrix = full_matrix.reset_index()
-    # Exportar
-    full_matrix.to_csv('export/ra_logro_matrix.csv', index=False)
-    print('Exportado: export/ra_logro_matrix.csv')
+    # Unir todo por estudiante y periodo
+    if not perfil_promedio.empty:
+        # Merge ra_matrix con perfil_promedio para tener PERFIL_Promedio, Nivel, Periodo, etc.
+        ra_matrix_reset = ra_matrix.reset_index()
+        # Expand ra_matrix para cada periodo del estudiante
+        ra_matrix_expanded = ra_matrix_reset.merge(perfil_promedio[['ID_EST','Periodo','PERFIL_Promedio','Nivel','ID_Cohorte','Fecha_corte']], on='ID_EST', how='right')
+        # Agregar desempeño, repitencia, deserción
+        for col in ['desempeño','repitencia','deserción']:
+            if col in riesgos_int_export.set_index('ID_EST').columns:
+                ra_matrix_expanded[col] = ra_matrix_expanded['ID_EST'].map(riesgos_int_export.set_index('ID_EST')[col])
+        # Agregar columnas de logros por competencia para cada estudiante
+        if not comp_logro.empty:
+            comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
+            comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
+            ra_matrix_expanded = ra_matrix_expanded.join(comp_matrix, on='ID_EST', how='left')
+        # Exportar
+        ra_matrix_expanded.to_csv('export/ra_logro_matrix.csv', index=False)
+        print('Exportado: export/ra_logro_matrix.csv')
+    else:
+        # Fallback a lógica anterior si no hay perfil_promedio
+        full_matrix = ra_matrix.copy()
+        for col in ['desempeño','repitencia','deserción']:
+            if col in riesgos_int_export.set_index('ID_EST').columns:
+                full_matrix[col] = riesgos_int_export.set_index('ID_EST')[col]
+        if 'Logro_Perfil' in perfil_logro_idx.columns:
+            full_matrix['Logro_Perfil'] = perfil_logro_idx['Logro_Perfil']
+        if 'ID_PERFIL' in perfil_logro_idx.columns:
+            full_matrix['ID_PERFIL'] = perfil_logro_idx['ID_PERFIL']
+        if not comp_logro.empty:
+            comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
+            comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
+            full_matrix = full_matrix.join(comp_matrix, how='left')
+        if 'Fecha_corte' in perfil_logro_idx.columns:
+            full_matrix['Fecha_corte'] = perfil_logro_idx['Fecha_corte']
+        full_matrix = full_matrix.reset_index()
+        full_matrix.to_csv('export/ra_logro_matrix.csv', index=False)
+        print('Exportado: export/ra_logro_matrix.csv')
 
     # Calcular alfa de Cronbach y Monte Carlo solo sobre la matriz de logros (ignorando columnas no numéricas)
     # Seleccionar solo columnas numéricas (RA, desempeño, etc.)

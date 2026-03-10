@@ -7,12 +7,46 @@
 3;Relaciones Industriales;RA3;1.0
 4;Comunicación;RA5;1.0
 # Nivel Medio: RA -> Competencia
-# Formato: ID_RA;ID_competencia;Peso_RA_en_competencia
+# Formato: ID_RA;ID_COMP;Peso_RA_en_competencia
 RA3;C2;0.5
 RA5;C2;0.2
 RA7;C2;0.3
 # Nivel Macro: Competencia -> Perfil
-# Formato: ID_competencia;Peso_competencia_en_perfil
-C1;0.4
-C2;0.3
-C3;0.3
+# Formato: ID_COMP;Peso_competencia_en_perfil
+# Formato: COMP_ID;perfil_id;Peso_competencia_en_perfil
+C1;P1;0.70
+C2;P1;0.20
+C3;P1;0.10
+C1;P2;0.75
+C2;P2;0.15
+C3;P2;0.10
+C3;P3;0.80
+C1;P3;0.10
+C2;P3;0.10
+C3;P4;0.60
+C1;P4;0.25
+C2;P4;0.15
+C2;P5;0.75
+C1;P5;0.15
+C3;P5;0.10
+C2;P6;0.80
+C1;P6;0.15
+C3;P6;0.05
+C3;P7;0.75
+C1;P7;0.15
+C2;P7;0.10
+C2;P8;0.70
+C1;P8;0.20
+C3;P8;0.10
+C3;P9;0.50
+C1;P9;0.30
+C2;P9;0.20
+C1;P10;0.80
+C2;P10;0.10
+C3;P10;0.10
+C1;P11;0.75
+C3;P11;0.15
+C2;P11;0.10
+C1;P12;0.80
+C2;P12;0.15
+C3;P12;0.05

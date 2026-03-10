@@ -1,11 +1,18 @@
 ID_Variable,Descripcion,Ubicacion,Usos,Ejemplo_ID,Logica_ID
-MATRIC, Número de matrícula del estudiante, matriculacion_historica.csv, Identificación única de estudiante, M1234, M + 4 números
-CARRI, ID de la carrera, dim_asignatura.csv, carreras.csv, Relación de asignatura y carrera, C001A, C + 3 números + letra facultad
-ASIGN, ID de la asignatura, dim_asignatura.csv, Identificación de materia, A12B3, A + 2 números + letra + número
-NIVEL, Nivel académico, dim_asignatura.csv, Clasificación por semestre, N01S, N + 2 números + letra semestre
-RAIDA, ID de resultado de aprendizaje, dim_asignatura.csv, dim_ra.csv, Evaluación de aprendizaje, R1A23, R + número + letra + 2 números
-PESRA, Peso del RA en la asignatura, dim_asignatura.csv, Ponderación jerárquica, P1000, P + 4 números (decimal sin punto)
-FEELA, Fecha de elaboración de datos, dim_asignatura.csv, dim_ra.csv, dim_competencia.csv, Trazabilidad, F2201, F + año(2) + mes(2)
-FECAR, Fecha de carga de datos, dim_asignatura.csv, dim_ra.csv, dim_competencia.csv, Trazabilidad, F2202, F + año(2) + mes(2)
-NOTAA, Calificación del estudiante, matriculacion_historica.csv, Evaluación de desempeño, N0850, N + 4 números (decimal sin punto)
-PERIO, Periodo académico, matriculacion_historica.csv, Trazabilidad temporal, O2211, O + año(2) + periodo(2)
+ID_EST,Identificador único del estudiante,matriculacion_historica.csv;fact_logro_ra.csv,Identificación individual y trazabilidad longitudinal,CZAM4321,PrimeraLetraNombre + PrimerApellido(3 letras) + Ultimos4Cedula
+ID_CARR,Identificador de la carrera,dim_programa.csv;dim_asignatura.csv,Relación curricular y versionamiento de malla,INGIND1719,SiglasCarrera + AñoMalla(2) + AñoRediseño(2)
+ID_ASIG,Identificador de la asignatura,dim_asignatura.csv,Identificación de materia dentro de la carrera,INGIND05LOG,SiglasCarrera + Nivel(2) + SiglaMateria(3)
+NIVEL,Nivel académico dentro de la malla,dim_asignatura.csv,Clasificación por semestre,05,NumeroSemestre(01-09)
+CREDIT,Créditos de la asignatura,dim_asignatura.csv,Análisis de carga académica y ponderación,4,NumeroEnteroPositivo
+ID_RA,Identificador de resultado de aprendizaje,dim_ra.csv;fact_logro_ra.csv,Evaluación individual no compensatoria,RA03,RA + NumeroSecuencial(2)
+ID_COMP,Identificador de competencia,dim_competencia.csv;competencia_perfil.csv,Análisis agregado de competencias y mapeo a perfil,CE1,CE + NumeroCompetencia
+ID_RA_COMP,Relación entre RA y competencia,map_ra_comp.csv,Integridad jerárquica curricular,RA03CE1,ID_RA + ID_COMP
+PESO_RA,Peso del RA en la asignatura,dim_ra.csv,Ponderación jerárquica sin compensación,25,NumeroEntero(0-100)
+NOTA_RA,Calificación obtenida en el RA,fact_logro_ra.csv,Evaluación de desempeño por resultado de aprendizaje,0850,4 numeros sin punto decimal
+PERIO,Periodo académico,matriculacion_historica.csv;fact_logro_ra.csv,Trazabilidad temporal,O2022-1,O + Año(4) + '-' + NumeroPeriodo
+F_ELAB,Fecha de elaboración del registro,dim_asignatura.csv;dim_ra.csv;dim_competencia.csv,Trazabilidad metodológica,202401,YYYYMM
+F_CARGA,Fecha de carga en el sistema,todas las tablas,Auditoría y control de datos,20240215,YYYYMMDD
+ID_EVAL,Identificador de evaluación aplicada,fact_logro_ra.csv,Trazabilidad de instrumento evaluativo,EVALRA0320221,EVAL + ID_RA + Año(4) + Periodo(1)
+UMBRAL_RA,Umbral mínimo de logro del RA,dim_ra.csv,Regla del motor SSD,0700,4 numeros sin punto decimal
+ID_ALERTA,Identificador de alerta generada por el SSD,ssd_alertas.csv,Gestión académica y mejora continua,ALT20221RA03,ALT + Año(4) + Periodo(1) + ID_RA
+ID_BRECHA,Identificador de brecha detectada,ssd_brechas.csv,Análisis de mejora continua,BR2022CE1,BR + Año(4) + ID_COMP

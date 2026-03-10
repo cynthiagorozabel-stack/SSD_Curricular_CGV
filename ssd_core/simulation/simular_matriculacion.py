@@ -93,19 +93,55 @@ if __name__ == "__main__":
     else:
         print(f"[DEBUG] Archivo NO existe, será creado.")
     try:
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            print(f"[DEBUG] Archivo abierto para escritura.")
-            writer = csv.writer(f)
-            writer.writerow([
-                'Periodo','Fecha_matriculacion','Fecha_carga','ID_EST','Nombre','Edad','Genero','Lugar_procedencia','ID_carrera','Carrera','Estado_sociocultural','Brecha_aprovechamiento','Nivel','Materia','Nota','Abandono','ID_Cohorte'
+        # Crear tres archivos: académico, sociodemográfico fijo, y contexto por periodo
+        output_academico = os.path.abspath('ssd_core/config/matriculacion_historica_test.csv')
+        output_sociodemo = os.path.abspath('ssd_core/config/datos_sociodemograficos_test.csv')
+        output_contexto = os.path.abspath('ssd_core/config/contexto_periodo_test.csv')
+        with open(output_academico, 'w', newline='', encoding='utf-8') as f_acad, \
+             open(output_sociodemo, 'w', newline='', encoding='utf-8') as f_soc, \
+             open(output_contexto, 'w', newline='', encoding='utf-8') as f_ctx:
+            writer_acad = csv.writer(f_acad)
+            writer_soc = csv.writer(f_soc)
+            writer_ctx = csv.writer(f_ctx)
+            # Encabezados
+            writer_acad.writerow([
+                'Periodo','Fecha_matriculacion','Fecha_carga','ID_EST','ID_carrera','Nivel','COD_ASIGNATURA','Nota','ID_Cohorte','Abandono'
             ])
-            print(f"[DEBUG] Encabezado escrito.")
-            total_rows = 0
+            writer_soc.writerow([
+                'Genero','Fecha_nacimiento','Lugar_procedencia','ID_carrera','ID_EST','Nombre','B_Aprovechamiento_Inicial','autoidentificacion_etnica','ID_Cohorte'
+            ])
+            writer_ctx.writerow([
+                'Estado_sociocultural','Alerta_Violeta_General','Alerta_V_Universitaria',
+                'Periodo','Fecha_matriculacion','Fecha_carga','ID_EST','ID_carrera','Edad','ID_Cohorte'
+            ])
+            total_rows_acad = 0
+            total_rows_soc = 0
+            total_rows_ctx = 0
+            estudiantes_soc = set()
             for est in estudiantes:
-                print(f"[DEBUG] Procesando estudiante: {est['ID_EST']}")
                 abandonado = 0
                 abandono_nivel = est.get('Abandono_nivel')
                 cohorte = est.get('Anio_Ingreso', 2022)
+                # Calcular fecha de nacimiento coherente con edad y año de ingreso (asume ingreso en marzo)
+                fecha_nacimiento = f"{cohorte - est['Edad']}-03-01"
+                # Simular autoidentificación étnica (única por estudiante)
+                etnias = ['mestizo', 'blanco', 'montubio', 'indigena', 'afroecuatoriana']
+                autoidentificacion_etnica = random.choices(etnias, weights=[0.7,0.1,0.07,0.08,0.05])[0]
+                # Escribir solo una vez los datos sociodemográficos fijos
+                if est['ID_EST'] not in estudiantes_soc:
+                    writer_soc.writerow([
+                        est['Genero'],
+                        fecha_nacimiento,
+                        est['Lugar_procedencia'],
+                        est['ID_carrera'],
+                        est['ID_EST'],
+                        est['Nombre'],
+                        est['Brecha_aprovechamiento'],
+                        autoidentificacion_etnica,
+                        est['Cohorte']
+                    ])
+                    estudiantes_soc.add(est['ID_EST'])
+                    total_rows_soc += 1
                 # Si la cohorte es la más reciente, solo simular hasta OCTAVO nivel
                 max_nivel = 'OCTAVO' if cohorte == max(ANIOS) else 'NOVENO'
                 for anio_curso in range(cohorte, 2026):
@@ -118,65 +154,69 @@ if __name__ == "__main__":
                             periodo_id = f'{nivel}-{periodo}'
                             fecha_matriculacion = f'{anio_curso}-{periodo}-01'
                             fecha_carga = datetime.now().strftime('%Y-%m-%d')
+                            edad_actual = est['Edad'] + (anio_curso - est['Anio_Ingreso'])
                             for materia in MATERIAS_NIVEL[nivel]:
                                 if abandono_nivel and nivel == abandono_nivel:
                                     abandonado = 1
                                     est['Abandono'] = 1
+                                # Archivo académico
                                 if not abandonado:
                                     nota = random.randint(50, 100)
                                     try:
                                         est['materias'][nivel][materia]['aprobado'] = nota >= MIN_APROBADO
                                         est['materias'][nivel][materia]['reprobado'] = 0 if nota >= MIN_APROBADO else 1
                                     except KeyError:
-                                        print(f"[ERROR] KeyError: nivel={nivel}, materia={materia}, materias_dict={est['materias']}")
+                                        print(f"[ERROR] KeyError: nivel={nivel}, materia={materia}, materias_dict={est['materias']}" )
                                         continue
-                                    writer.writerow([
+                                    writer_acad.writerow([
                                         f"O{anio_curso}-{periodo}",
                                         fecha_matriculacion,
                                         fecha_carga,
                                         est['ID_EST'],
-                                        est['Nombre'],
-                                        est['Edad'],
-                                        est['Genero'],
-                                        est['Lugar_procedencia'],
                                         est['ID_carrera'],
-                                        est['Carrera'],
-                                        est['Estado_sociocultural'],
-                                        est['Brecha_aprovechamiento'],
                                         nivel,
                                         materia,
                                         nota,
-                                        est['Abandono'],
-                                        est['Cohorte']
+                                        est['Cohorte'],
+                                        est['Abandono']
                                     ])
                                 else:
-                                    writer.writerow([
+                                    writer_acad.writerow([
                                         f"O{anio_curso}-{periodo}",
                                         fecha_matriculacion,
                                         fecha_carga,
                                         est['ID_EST'],
-                                        est['Nombre'],
-                                        est['Edad'],
-                                        est['Genero'],
-                                        est['Lugar_procedencia'],
                                         est['ID_carrera'],
-                                        est['Carrera'],
-                                        est['Estado_sociocultural'],
-                                        est['Brecha_aprovechamiento'],
                                         nivel,
                                         materia,
                                         'NA',
-                                        est['Abandono'],
+                                        est['Cohorte'],
+                                        est['Abandono']
+                                    ])
+                                total_rows_acad += 1
+                                # Archivo de contexto por periodo (una fila por periodo, no por materia)
+                                if materia == MATERIAS_NIVEL[nivel][0]:
+                                    alerta_violeta_general = random.randint(1, 5)
+                                    alerta_v_universitaria = random.randint(1, 5)
+                                    writer_ctx.writerow([
+                                        est['Estado_sociocultural'],
+                                        alerta_violeta_general,
+                                        alerta_v_universitaria,
+                                        f"O{anio_curso}-{periodo}",
+                                        fecha_matriculacion,
+                                        fecha_carga,
+                                        est['ID_EST'],
+                                        est['ID_carrera'],
+                                        edad_actual,
                                         est['Cohorte']
                                     ])
-                                total_rows += 1
-
-            f.flush()
-            print(f"[DEBUG] Total rows written: {total_rows}")
-            print(f"[DEBUG] File closed: {f.closed}")
-            f.flush()
-            print(f"[DEBUG] Total rows written: {total_rows}")
-            print(f"[DEBUG] File closed: {f.closed}")
+                                    total_rows_ctx += 1
+            f_acad.flush()
+            f_soc.flush()
+            f_ctx.flush()
+            print(f"[DEBUG] Total rows written (acad): {total_rows_acad}")
+            print(f"[DEBUG] Total rows written (soc): {total_rows_soc}")
+            print(f"[DEBUG] Total rows written (ctx): {total_rows_ctx}")
     except Exception as e:
         print(f"[ERROR] Excepción al abrir o escribir el archivo: {e}")
 

@@ -1,4 +1,37 @@
-perfil_id,ID_COMP,peso,Fecha_recoleccion,Fecha_carga
-P1,C1,0.33,2026-03-03,2026-03-03
-P1,C2,0.33,2026-03-03,2026-03-03
-P1,C3,0.34,2026-03-03,2026-03-03
+perfil_id,ID_COMP,peso,Nombre_competencia,Descripcion,F_ELAB,F_CARGA
+P1,C1,0.70,Ingenieria e Innovacion,Identificacion de problemas de ingenieria,2026-03-05,2026-03-05
+P1,C2,0.20,Gestion y Liderazgo,Contexto organizacional del problema,2026-03-05,2026-03-05
+P1,C3,0.10,Responsabilidad y Etica,Limitaciones sociales y regulatorias,2026-03-05,2026-03-05
+P2,C1,0.75,Ingenieria e Innovacion,Seleccion de metodos de solucion de ingenieria,2026-03-05,2026-03-05
+P2,C2,0.15,Gestion y Liderazgo,Viabilidad organizacional de la solucion,2026-03-05,2026-03-05
+P2,C3,0.10,Responsabilidad y Etica,Restricciones eticas y normativas,2026-03-05,2026-03-05
+P3,C3,0.80,Responsabilidad y Etica,Etica y responsabilidad profesional,2026-03-05,2026-03-05
+P3,C1,0.10,Ingenieria e Innovacion,Aplicacion tecnica responsable,2026-03-05,2026-03-05
+P3,C2,0.10,Gestion y Liderazgo,Responsabilidad organizacional,2026-03-05,2026-03-05
+P4,C3,0.60,Responsabilidad y Etica,Impacto social de la ingenieria,2026-03-05,2026-03-05
+P4,C1,0.25,Ingenieria e Innovacion,Aplicacion tecnica en contexto social,2026-03-05,2026-03-05
+P4,C2,0.15,Gestion y Liderazgo,Impacto organizacional de decisiones,2026-03-05,2026-03-05
+P5,C2,0.75,Gestion y Liderazgo,Trabajo en equipo y coordinacion,2026-03-05,2026-03-05
+P5,C1,0.15,Ingenieria e Innovacion,Trabajo tecnico colaborativo,2026-03-05,2026-03-05
+P5,C3,0.10,Responsabilidad y Etica,Responsabilidad en equipos de trabajo,2026-03-05,2026-03-05
+P6,C2,0.80,Gestion y Liderazgo,Comunicacion profesional efectiva,2026-03-05,2026-03-05
+P6,C1,0.15,Ingenieria e Innovacion,Comunicacion tecnica de soluciones,2026-03-05,2026-03-05
+P6,C3,0.05,Responsabilidad y Etica,Comunicacion responsable,2026-03-05,2026-03-05
+P7,C3,0.75,Responsabilidad y Etica,Responsabilidad social y ambiental,2026-03-05,2026-03-05
+P7,C1,0.15,Ingenieria e Innovacion,Impacto tecnologico ambiental,2026-03-05,2026-03-05
+P7,C2,0.10,Gestion y Liderazgo,Gestion sostenible de proyectos,2026-03-05,2026-03-05
+P8,C2,0.70,Gestion y Liderazgo,Gestion empresarial y de proyectos,2026-03-05,2026-03-05
+P8,C1,0.20,Ingenieria e Innovacion,Aplicacion tecnica en proyectos,2026-03-05,2026-03-05
+P8,C3,0.10,Responsabilidad y Etica,Gestion responsable de riesgos,2026-03-05,2026-03-05
+P9,C3,0.50,Responsabilidad y Etica,Aprendizaje continuo y desarrollo profesional,2026-03-05,2026-03-05
+P9,C1,0.30,Ingenieria e Innovacion,Actualizacion tecnica permanente,2026-03-05,2026-03-05
+P9,C2,0.20,Gestion y Liderazgo,Desarrollo profesional organizacional,2026-03-05,2026-03-05
+P10,C1,0.80,Ingenieria e Innovacion,Investigacion e innovacion en ingenieria,2026-03-05,2026-03-05
+P10,C2,0.10,Gestion y Liderazgo,Innovacion organizacional,2026-03-05,2026-03-05
+P10,C3,0.10,Responsabilidad y Etica,Investigacion responsable,2026-03-05,2026-03-05
+P11,C1,0.75,Ingenieria e Innovacion,Uso de informacion cientifica y datos,2026-03-05,2026-03-05
+P11,C3,0.15,Responsabilidad y Etica,Uso responsable de informacion,2026-03-05,2026-03-05
+P11,C2,0.10,Gestion y Liderazgo,Aplicacion organizacional de datos,2026-03-05,2026-03-05
+P12,C1,0.80,Ingenieria e Innovacion,Diseño y administracion de sistemas industriales,2026-03-05,2026-03-05
+P12,C2,0.15,Gestion y Liderazgo,Gestion operativa de sistemas,2026-03-05,2026-03-05
+P12,C3,0.05,Responsabilidad y Etica,Consideraciones eticas en el diseño,2026-03-05,2026-03-05
