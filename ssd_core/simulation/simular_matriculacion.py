@@ -13,7 +13,7 @@ MATERIAS_NIVEL = {
     'OCTAVO': ['FEPRO', 'INPR1', 'PPP03', 'PRIN2', 'SETIT', 'SIMOP'],
     'NOVENO': ['DETIT', 'DIPLA', 'GEEMP', 'INPR2', 'RELIN']
 }
-ANIOS = list(range(2010, 2016))
+ANIOS = list(range(2010, 2027))  # 2010 a 2026 inclusive
 GENERO = ['M', 'F']
 ESTADOS = ['Alto', 'Medio', 'Bajo']
 PERIODOS = [1, 2]
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     import numpy as np
     import uuid
 
-    N_ESTUDIANTES_POR_COHORTE = 30  # Puedes ajustar este número
+    N_ESTUDIANTES_POR_COHORTE = 35  # Ajuste solicitado: 35 estudiantes por cohorte
 
 
     print(f"[DEBUG] NIVELES: {NIVELES}")
@@ -41,9 +41,25 @@ if __name__ == "__main__":
 
     estudiantes = []
     for anio in ANIOS:
-        idx_abandono_segundo = set(random.sample(range(N_ESTUDIANTES_POR_COHORTE), int(N_ESTUDIANTES_POR_COHORTE*0.2)))
+        # Cohortes antiguas (2010-2014): mayoría graduados
+        if anio <= 2014:
+            abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.05)  # pocos abandonan temprano
+            abandono_quinto = int(N_ESTUDIANTES_POR_COHORTE * 0.05)
+            max_nivel = 'NOVENO'
+        # Cohortes intermedias (2015-2021): niveles intermedios
+        elif 2015 <= anio <= 2021:
+            abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.12)
+            abandono_quinto = int(N_ESTUDIANTES_POR_COHORTE * 0.10)
+            max_nivel = random.choice(['TERCERO','CUARTO','QUINTO','SEXTO','SEPTIMO','OCTAVO'])
+        # Cohortes recientes (2022-2026): solo primeros niveles
+        else:
+            abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.15)
+            abandono_quinto = 0
+            max_nivel = random.choice(['PRIMER','SEGUNDO','TERCERO'])
+
+        idx_abandono_segundo = set(random.sample(range(N_ESTUDIANTES_POR_COHORTE), abandono_segundo))
         restantes = [i for i in range(N_ESTUDIANTES_POR_COHORTE) if i not in idx_abandono_segundo]
-        idx_abandono_quinto = set(random.sample(restantes, int(N_ESTUDIANTES_POR_COHORTE*0.12)))
+        idx_abandono_quinto = set(random.sample(restantes, abandono_quinto))
         for i in range(N_ESTUDIANTES_POR_COHORTE):
             edad = random.randint(17, 22)
             genero = random.choice(GENERO)
@@ -53,6 +69,7 @@ if __name__ == "__main__":
             materias_dict = {}
             for nivel in NIVELES:
                 materias_dict[nivel] = {m: {'reprobado': 0, 'aprobado': False} for m in MATERIAS_NIVEL[nivel]}
+            # Asignar abandono según reglas
             if i in idx_abandono_segundo:
                 abandono_nivel = 'SEGUNDO'
             elif i in idx_abandono_quinto:
@@ -63,7 +80,6 @@ if __name__ == "__main__":
             import string
             letras = ''.join(random.choices(string.ascii_uppercase, k=3))
             digitos = ''.join(random.choices('0123456789', k=4))
-            # Asignar periodo de ingreso realista: O{anio}-1 (primer periodo del año)
             periodo_ingreso = f"O{anio}-1"
             id_est = f"E{anio}{letras}{digitos}"
             estudiantes.append({
@@ -81,7 +97,8 @@ if __name__ == "__main__":
                 'Abandono_nivel': abandono_nivel,
                 'Cohorte': periodo_ingreso,
                 'Anio_Ingreso': anio,
-                'Periodo_Ingreso': periodo_ingreso
+                'Periodo_Ingreso': periodo_ingreso,
+                'Max_nivel': max_nivel
             })
 
     # Usar solo rutas y códigos preexistentes
@@ -142,23 +159,23 @@ if __name__ == "__main__":
                     ])
                     estudiantes_soc.add(est['ID_EST'])
                     total_rows_soc += 1
-                # Si la cohorte es la más reciente, solo simular hasta OCTAVO nivel
-                max_nivel = 'OCTAVO' if cohorte == max(ANIOS) else 'NOVENO'
-                for anio_curso in range(cohorte, 2026):
+                # Simular avance académico según tipo de cohorte
+                max_nivel = est.get('Max_nivel', 'NOVENO')
+                niveles_a_simular = NIVELES[:NIVELES.index(max_nivel)+1]
+                for anio_curso in range(est['Anio_Ingreso'], 2027):
                     if abandonado:
                         break
-                    for nivel in NIVELES:
-                        if max_nivel == 'OCTAVO' and nivel == 'NOVENO':
-                            continue
+                    for nivel in niveles_a_simular:
+                        # Si el estudiante abandonó, no simular más niveles
+                        if abandono_nivel and nivel == abandono_nivel:
+                            abandonado = 1
+                            est['Abandono'] = 1
                         for periodo in PERIODOS:
                             periodo_id = f'{nivel}-{periodo}'
                             fecha_matriculacion = f'{anio_curso}-{periodo}-01'
                             fecha_carga = datetime.now().strftime('%Y-%m-%d')
                             edad_actual = est['Edad'] + (anio_curso - est['Anio_Ingreso'])
                             for materia in MATERIAS_NIVEL[nivel]:
-                                if abandono_nivel and nivel == abandono_nivel:
-                                    abandonado = 1
-                                    est['Abandono'] = 1
                                 # Archivo académico
                                 if not abandonado:
                                     nota = random.randint(50, 100)

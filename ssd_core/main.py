@@ -36,8 +36,21 @@ def main(carrera_id):
     config = config_loader.load()
     config_loader.validate()
     ra_data = DataLoader(ra_path).load()
+    # Homologar ra_id a RA_ID
+    if 'ra_id' in ra_data.columns:
+        ra_data = ra_data.rename(columns={'ra_id': 'RA_ID'})
+    # Homologar RA_ID a ID_RA para compatibilidad con engines
+    if 'RA_ID' in ra_data.columns:
+        ra_data = ra_data.rename(columns={'RA_ID': 'ID_RA'})
+    # Homologar competencia_id a ID_COMP si existiera
     if 'competencia_id' in ra_data.columns:
         ra_data = ra_data.rename(columns={'competencia_id': 'ID_COMP'})
+    # Homologar y mapear COD_ASIGNATURA a cada RA_ID usando asignaturas.csv
+    asig_path = os.path.join('ssd_core', 'config', 'asignaturas.csv')
+    asig_data = pd.read_csv(asig_path)
+    ra_to_asig = asig_data.set_index('RA')['COD_ASIGNATURA'].to_dict() if 'RA' in asig_data.columns and 'COD_ASIGNATURA' in asig_data.columns else {}
+    if 'RA_ID' in ra_data.columns and ra_to_asig:
+        ra_data['COD_ASIGNATURA'] = ra_data['RA_ID'].map(ra_to_asig)
     competencia_data = DataLoader(competencia_path).load()
     if 'ID_Competencia' in competencia_data.columns:
         competencia_data = competencia_data.rename(columns={'ID_Competencia': 'ID_COMP'})
@@ -96,9 +109,11 @@ def main(carrera_id):
     ra_logro = matric.groupby(['ID_EST','RA']).agg({'Nota':'mean'}).reset_index()
     ra_logro = ra_logro.rename(columns={'Nota':'Logro_RA'})
     ra_logro['Fecha_corte'] = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-    # Agregar ID_Cohorte a ra_logro
+    # Agregar ID_Cohorte y Nivel a ra_logro
     id_cohorte_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict()
+    nivel_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Nivel'].to_dict() if 'Nivel' in matric.columns else {}
     ra_logro['ID_Cohorte'] = ra_logro['ID_EST'].map(id_cohorte_map)
+    ra_logro['Nivel'] = ra_logro['ID_EST'].map(nivel_map) if nivel_map else ''
     # Calcular logro de competencia por estudiante
     comp_logro = []
     for est in ra_logro['ID_EST'].unique():
@@ -108,7 +123,7 @@ def main(carrera_id):
             ra_asociados = asig[(asig['RA'].notnull()) & (asig['RA'].str.startswith('RA')) & (asig['RA'].isin(est_ra['RA']))]['RA'].unique().tolist()
             ra_vals = est_ra[est_ra['RA'].isin(ra_asociados)]['Logro_RA']
             if not ra_vals.empty:
-                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Cohorte': id_cohorte_map.get(est, '')})
+                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Cohorte': id_cohorte_map.get(est, ''), 'Nivel': nivel_map.get(est, '') if nivel_map else ''})
     comp_logro = pd.DataFrame(comp_logro)
     # Calcular perfil por estudiante y periodo (suma ponderada de competencias)
     # Extraer nivel y periodo desde matriculacion_historica_test.csv
@@ -169,23 +184,42 @@ def main(carrera_id):
     for est, grupo in matric.groupby('ID_EST'):
         notas_validas = grupo['Nota_num'].dropna()
         desempeno = notas_validas.mean() if not notas_validas.empty else np.nan
-        repitencia = grupo.groupby('Materia').size()
+        # Usar 'COD_ASIGNATURA' en vez de 'Materia' para repitencia
+        repitencia = grupo.groupby('COD_ASIGNATURA').size() if 'COD_ASIGNATURA' in grupo.columns else grupo.groupby('Materia').size()
         repitencia = (repitencia > 1).sum()
         desercion = grupo['Abandono'].fillna(0).astype(int).sum()
         riesgos_calc.append({'ID_EST': est, 'desempeño': round(desempeno,2) if not np.isnan(desempeno) else '', 'repitencia': repitencia, 'deserción': desercion})
     riesgos_int_export = pd.DataFrame(riesgos_calc)
     # Exportar archivos
-    ra_logro.to_csv('export/ra_logro_individual.csv', index=False)
-    comp_logro.to_csv('export/competencia_logro_individual.csv', index=False)
+    # Exportar ra_logro_individual con ID_Cohorte
+    # Mapear RA a RA_ID usando ra_data si existe
+    ra_id_map = None
+    if 'RA_ID' in ra_data.columns and 'RA' in ra_data.columns:
+        ra_id_map = ra_data.drop_duplicates('RA')[['RA', 'RA_ID']].set_index('RA')['RA_ID'].to_dict()
+    ra_logro['RA_ID'] = ra_logro['RA'].map(ra_id_map) if ra_id_map else ra_logro['RA']
+    ra_cols = ['ID_EST', 'RA_ID', 'RA', 'Logro_RA', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
+    ra_export = ra_logro[ra_cols] if all(col in ra_logro.columns for col in ra_cols) else ra_logro
+    ra_export.to_csv('export/ra_logro_individual.csv', index=False)
+
+    # Exportar competencia_logro_individual con ID_Cohorte
+    comp_cols = ['ID_EST', 'ID_COMP', 'Logro_Competencia', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
+    comp_export = comp_logro[comp_cols] if all(col in comp_logro.columns for col in comp_cols) else comp_logro
+    comp_export.to_csv('export/competencia_logro_individual.csv', index=False)
     perfil_logro.to_csv('export/perfil_logro_individual.csv', index=False)
     if not perfil_promedio.empty:
         perfil_promedio.to_csv('export/perfil_promedio_individual.csv', index=False)
     # Sobrescribir riesgos internos individuales siempre
-    # Añadir trazabilidad a riesgos internos: ID_Cohorte y Fecha_corte
-    if not perfil_logro.empty:
-        perfil_idx = perfil_logro.set_index('ID_EST')
-        riesgos_int_export['ID_Cohorte'] = riesgos_int_export['ID_EST'].map(perfil_idx['ID_Cohorte']) if 'ID_Cohorte' in perfil_idx.columns else ''
-        riesgos_int_export['Fecha_corte'] = riesgos_int_export['ID_EST'].map(perfil_idx['Fecha_corte']) if 'Fecha_corte' in perfil_idx.columns else ''
+    # Añadir trazabilidad a riesgos internos: ID_Cohorte, Nivel, Periodo, Fecha_matriculacion, Fecha_carga desde matric
+    id_cohorte_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict() if 'ID_Cohorte' in matric.columns else {}
+    nivel_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Nivel'].to_dict() if 'Nivel' in matric.columns else {}
+    periodo_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Periodo'].to_dict() if 'Periodo' in matric.columns else {}
+    fecha_mat_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Fecha_matriculacion'].to_dict() if 'Fecha_matriculacion' in matric.columns else {}
+    fecha_carga_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Fecha_carga'].to_dict() if 'Fecha_carga' in matric.columns else {}
+    riesgos_int_export['ID_Cohorte'] = riesgos_int_export['ID_EST'].map(id_cohorte_map) if id_cohorte_map else ''
+    riesgos_int_export['Nivel'] = riesgos_int_export['ID_EST'].map(nivel_map) if nivel_map else ''
+    riesgos_int_export['Periodo'] = riesgos_int_export['ID_EST'].map(periodo_map) if periodo_map else ''
+    riesgos_int_export['Fecha_matriculacion'] = riesgos_int_export['ID_EST'].map(fecha_mat_map) if fecha_mat_map else ''
+    riesgos_int_export['Fecha_carga'] = riesgos_int_export['ID_EST'].map(fecha_carga_map) if fecha_carga_map else ''
     riesgos_int_export.to_csv('export/riesgos_internos_individual.csv', index=False)
     print('Exportados: ra_logro_individual.csv, competencia_logro_individual.csv, perfil_logro_individual.csv, riesgos_internos_individual.csv')
 
@@ -198,6 +232,8 @@ def main(carrera_id):
     # Desempeño, repitencia, deserción ya calculados en riesgos_int_export
     perfil_logro_idx = perfil_logro.set_index('ID_EST') if 'ID_EST' in perfil_logro.columns else pd.DataFrame()
     # Unir todo por estudiante y periodo
+
+    full_matrix = None
     if not perfil_promedio.empty:
         # Merge ra_matrix con perfil_promedio para tener PERFIL_Promedio, Nivel, Periodo, etc.
         ra_matrix_reset = ra_matrix.reset_index()
@@ -215,6 +251,7 @@ def main(carrera_id):
         # Exportar
         ra_matrix_expanded.to_csv('export/ra_logro_matrix.csv', index=False)
         print('Exportado: export/ra_logro_matrix.csv')
+        full_matrix = ra_matrix_expanded.copy()
     else:
         # Fallback a lógica anterior si no hay perfil_promedio
         full_matrix = ra_matrix.copy()
