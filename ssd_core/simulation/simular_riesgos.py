@@ -79,7 +79,11 @@ for estudiante_id in egresados:
 
 with open('ssd_core/config/riesgos_externos.csv', 'w', newline='', encoding='utf-8') as f:
     writer = csv.writer(f)
-    writer.writerow(['Periodo','Fecha_recoleccion','Fecha_carga','ID_EST','ID_Cohorte','empleabilidad','satisfaccion'])
+    # Esquema homologado con el resto del sistema (model_config.yaml / main.py /
+    # simular_matriculacion.py): la columna de estudiante es 'estudiante_id' y la de
+    # satisfacción lleva tilde ('satisfacción'). Antes decían 'ID_EST' y 'satisfaccion',
+    # lo que rompía el cálculo de BEG/ISPG en main.py.
+    writer.writerow(['Periodo','Fecha_recoleccion','Fecha_carga','estudiante_id','ID_Cohorte','empleabilidad','satisfacción'])
     writer.writerows(riesgos_externos)
 
 print('Riesgos internos y externos simulados a partir de matriculación histórica, compatibles con sistemas de soporte a la decisión.')
