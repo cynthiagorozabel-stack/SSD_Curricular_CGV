@@ -1,0 +1,27 @@
+ssd_core/config/matriculacion_historica_test.csv
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Data
+ssd_core/data/raw/
+ssd_core/data/processed/
+
+# Audit and export
+ssd_core/audit/
+ssd_core/export/
+audit/
+export/
+
+# OS
+.DS_Store
+Thumbs.db

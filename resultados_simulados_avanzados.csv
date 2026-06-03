@@ -1,0 +1,12 @@
+# resultados_simulados_avanzados.csv
+# Simulación de resultados con granularidad y tipificación de indicadores según CACES 2023
+indicador_id,nivel_analitico,tipo_indicador,categoria,periodo,cohorte,estudiante_id,competencia_id,perfil_id,valor,fuente,run_id,version_modelo
+RA01,RA,academico,aprendizaje,O2025-1,2025,E1,NA,NA,0.82,ra_competencia.csv,sim001,1.0
+COMP01,COMP,academico,competencia,O2025-1,2025,E1,C1,NA,0.75,competencia_perfil.csv,sim001,1.0
+PERF01,PERFIL,academico,perfil,O2025-1,2025,E1,NA,P1,0.68,competencia_perfil.csv,sim001,1.0
+RI01,RIESGO_INT,riesgo,desempeño,O2025-1,2025,E1,NA,NA,0.80,riesgos_internos.csv,sim001,1.0
+RE01,RIESGO_EXT,riesgo,empleabilidad,O2025-1,2025,E1,NA,NA,0.90,riesgos_externos.csv,sim001,1.0
+RE02,RIESGO_EXT,riesgo,satisfaccion_empleador,O2025-1,2025,E1,NA,NA,0.85,riesgos_externos.csv,sim001,1.0
+RE03,RIESGO_EXT,riesgo,vinculacion_comunidad,O2025-1,2025,E1,NA,NA,0.70,riesgos_externos.csv,sim001,1.0
+RE04,RIESGO_EXT,riesgo,produccion_cientifica,O2025-1,2025,E1,NA,NA,0.10,riesgos_externos.csv,sim001,1.0
+# ... más filas para otros estudiantes, competencias, perfiles y periodos ...
