@@ -13,7 +13,12 @@ MATERIAS_NIVEL = {
     'OCTAVO': ['FEPRO', 'INPR1', 'PPP03', 'PRIN2', 'SETIT', 'SIMOP'],
     'NOVENO': ['DETIT', 'DIPLA', 'GEEMP', 'INPR2', 'RELIN']
 }
-ANIOS = list(range(2010, 2027))  # 2010 a 2026 inclusive
+# === Parámetro principal del rango de simulación ===
+# Para ajustar el rango basta con cambiar N_ANIOS_SIMULACION (es lo único necesario).
+ANIO_FINAL = 2026                 # Año más reciente simulado (año "actual" de los datos)
+N_ANIOS_SIMULACION = 8            # Rango de simulación en años. Valor óptimo = 8 (cambiar a 7 si se requiere)
+ANIO_INICIAL = ANIO_FINAL - N_ANIOS_SIMULACION + 1
+ANIOS = list(range(ANIO_INICIAL, ANIO_FINAL + 1))  # Cohortes: ANIO_INICIAL..ANIO_FINAL inclusive
 GENERO = ['M', 'F']
 ESTADOS = ['Alto', 'Medio', 'Bajo']
 PERIODOS = [1, 2]
@@ -40,22 +45,30 @@ if __name__ == "__main__":
 
 
     estudiantes = []
+    # La clasificación de cohortes (graduada / intermedia / reciente) es RELATIVA a la
+    # antigüedad de la cohorte dentro de la ventana de simulación, no a años calendario
+    # fijos. Así el rango (N_ANIOS_SIMULACION) se puede ajustar sin romper el modelo: las
+    # cohortes más antiguas siguen graduándose (NOVENO) y por tanto BEG/ISPG/riesgos
+    # externos se siguen calculando. Un estudiante tarda ~5 años en alcanzar NOVENO.
+    ANIOS_PARA_GRADUARSE = 5     # años de avance necesarios para alcanzar NOVENO (graduarse)
+    ANIOS_COHORTE_RECIENTE = 2   # cohortes con <= 2 años de avance solo cursan los primeros niveles
     for anio in ANIOS:
-        # Cohortes antiguas (2010-2014): mayoría graduados
-        if anio <= 2014:
+        antiguedad = ANIO_FINAL - anio  # 0 = cohorte más reciente
+        # Cohortes con suficiente avance: mayoría graduados (NOVENO)
+        if antiguedad >= ANIOS_PARA_GRADUARSE:
             abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.05)  # pocos abandonan temprano
             abandono_quinto = int(N_ESTUDIANTES_POR_COHORTE * 0.05)
             max_nivel = 'NOVENO'
-        # Cohortes intermedias (2015-2021): niveles intermedios
-        elif 2015 <= anio <= 2021:
-            abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.12)
-            abandono_quinto = int(N_ESTUDIANTES_POR_COHORTE * 0.10)
-            max_nivel = random.choice(['TERCERO','CUARTO','QUINTO','SEXTO','SEPTIMO','OCTAVO'])
-        # Cohortes recientes (2022-2026): solo primeros niveles
-        else:
+        # Cohortes recientes: solo primeros niveles
+        elif antiguedad <= ANIOS_COHORTE_RECIENTE:
             abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.15)
             abandono_quinto = 0
             max_nivel = random.choice(['PRIMER','SEGUNDO','TERCERO'])
+        # Cohortes intermedias: niveles intermedios
+        else:
+            abandono_segundo = int(N_ESTUDIANTES_POR_COHORTE * 0.12)
+            abandono_quinto = int(N_ESTUDIANTES_POR_COHORTE * 0.10)
+            max_nivel = random.choice(['TERCERO','CUARTO','QUINTO','SEXTO','SEPTIMO','OCTAVO'])
 
         idx_abandono_segundo = set(random.sample(range(N_ESTUDIANTES_POR_COHORTE), abandono_segundo))
         restantes = [i for i in range(N_ESTUDIANTES_POR_COHORTE) if i not in idx_abandono_segundo]
@@ -162,7 +175,7 @@ if __name__ == "__main__":
                 # Simular avance académico según tipo de cohorte
                 max_nivel = est.get('Max_nivel', 'NOVENO')
                 niveles_a_simular = NIVELES[:NIVELES.index(max_nivel)+1]
-                for anio_curso in range(est['Anio_Ingreso'], 2027):
+                for anio_curso in range(est['Anio_Ingreso'], ANIO_FINAL + 1):
                     if abandonado:
                         break
                     for nivel in niveles_a_simular:

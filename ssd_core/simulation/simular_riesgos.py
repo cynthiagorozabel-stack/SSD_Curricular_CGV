@@ -3,7 +3,11 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# Cargar historial de matriculación
+# Cargar historial de matriculación.
+# NOTA: este simulador de riesgos NO define su propio rango de años; deriva el periodo
+# completo de los datos del CSV de matriculación. Por eso queda alineado automáticamente
+# con N_ANIOS_SIMULACION (definido en simular_matriculacion.py): basta con regenerar la
+# matriculación y volver a ejecutar este script para que los riesgos usen la misma ventana.
 matric_path = 'ssd_core/config/matriculacion_historica_test.csv'
 df = pd.read_csv(matric_path)
 
