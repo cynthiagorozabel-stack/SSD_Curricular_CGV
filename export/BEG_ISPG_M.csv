@@ -1,0 +1,4 @@
+ID_Cohorte,N,Nivel_Analisis,Promedio_Logro_Perfil_Noveno,BEG,PRE_BEG,Riesgo_interno,Riesgo_externo,ISPG,ISPG_norm,Clasificacion,Fuente_datos,Fecha_carga,Fecha_analisis,Alpha_Cronbach,MonteCarlo_mean,MonteCarlo_std
+O2019-1,6384,NOVENO,74.97,25.03,25.03,42.583,0,-0.26,0,Rojo,export/perfil_logro_individual.csv,2026-06-15 21:15:15,2026-06-15 22:17:27,1.043941563509053,,
+O2020-1,5592,NOVENO,74.97,25.03,25.03,42.539,0,-0.247,0,Rojo,export/perfil_logro_individual.csv,2026-06-15 21:15:15,2026-06-15 22:17:27,1.043941563509053,,
+O2021-1,4800,NOVENO,75.01,24.99,24.99,42.581,0,-0.279,0,Rojo,export/perfil_logro_individual.csv,2026-06-15 21:15:15,2026-06-15 22:17:27,1.043941563509053,,

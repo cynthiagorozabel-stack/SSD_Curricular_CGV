@@ -109,15 +109,33 @@ def main():
     riesgos_int['ID_Cohorte'] = riesgos_int['ID_EST'].map(est_to_cohorte) if 'ID_EST' in riesgos_int.columns else None
     riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(est_to_cohorte) if 'estudiante_id' in riesgos_ext.columns else None
     if 'desempeño' in riesgos_int.columns:
-        riesgos_int['riesgo_interno'] = riesgos_int[['desempeño', 'repitencia', 'deserción']].mean(axis=1)
+        riesgos_int['riesgo_interno'] = pd.to_numeric(riesgos_int[['desempeño', 'repitencia', 'deserción']].mean(axis=1), errors='coerce')
     if 'empleabilidad' in riesgos_ext.columns:
-        riesgos_ext['riesgo_externo'] = riesgos_ext[['empleabilidad', 'satisfacción']].mean(axis=1)
+        riesgos_ext['riesgo_externo'] = pd.to_numeric(riesgos_ext[['empleabilidad', 'satisfacción']].mean(axis=1), errors='coerce')
+
+    # Escalar riesgos a 0-100 si están en 0-1
+    if 'riesgo_interno' in riesgos_int.columns:
+        max_int = riesgos_int['riesgo_interno'].max(skipna=True)
+        if pd.notna(max_int) and max_int <= 1:
+            riesgos_int['riesgo_interno'] = riesgos_int['riesgo_interno'] * 100
+    if 'riesgo_externo' in riesgos_ext.columns:
+        max_ext = riesgos_ext['riesgo_externo'].max(skipna=True)
+        if pd.notna(max_ext) and max_ext <= 1:
+            riesgos_ext['riesgo_externo'] = riesgos_ext['riesgo_externo'] * 100
+
     # Riesgo externo global: mediana de las cohortes de los últimos 5 años
     cohortes_ordenadas = sorted(resumen_df['ID_Cohorte'].unique(), reverse=True)
     cohortes_ultimos_5 = cohortes_ordenadas[:5]
-    valores_ultimos_5 = riesgos_ext[riesgos_ext['ID_Cohorte'].isin(cohortes_ultimos_5)]['riesgo_externo'] if 'riesgo_externo' in riesgos_ext.columns else []
-    riesgo_ext_global = float(np.median(valores_ultimos_5)) if len(valores_ultimos_5) > 0 else 0
-    riesgo_int_cohorte = riesgos_int.groupby('ID_Cohorte')['riesgo_interno'].mean() if 'riesgo_interno' in riesgos_int.columns else pd.Series(dtype=float)
+    valores_ultimos_5 = (riesgos_ext[riesgos_ext['ID_Cohorte'].isin(cohortes_ultimos_5)]['riesgo_externo']
+                         if 'riesgo_externo' in riesgos_ext.columns else [])
+    if len(valores_ultimos_5) > 0:
+        riesgo_ext_global = float(np.median(valores_ultimos_5))
+    else:
+        riesgo_ext_global = np.nan
+        print('Advertencia: no se encontraron valores de riesgo_externo para las cohortes recientes; se marcará como sin dato.')
+
+    riesgo_int_cohorte = (riesgos_int.groupby('ID_Cohorte')['riesgo_interno'].mean()
+                          if 'riesgo_interno' in riesgos_int.columns else pd.Series(dtype=float))
 
     alpha = _ultimo_alpha_cronbach()
 
@@ -128,14 +146,19 @@ def main():
         if row['BEG'] == '' or pd.isna(row['BEG']):
             continue
         cohorte = row['ID_Cohorte']
-        beg = row['BEG'] / 100 if row['BEG'] > 1 else row['BEG']
-        riesgo_int = riesgo_int_cohorte.get(cohorte, 0)
+        # BEG, Riesgo_interno y Riesgo_externo estarán en la escala 0-100
+        beg = row['BEG']
+        riesgo_int = riesgo_int_cohorte.get(cohorte, np.nan)
         riesgo_ext = riesgo_ext_global
+        # Si faltan riesgos, tratarlos como 0 pero ya se imprimió advertencia para externo
+        riesgo_int = 0 if pd.isna(riesgo_int) else riesgo_int
+        riesgo_ext = 0 if pd.isna(riesgo_ext) else riesgo_ext
+        # Calcular ISPG en la escala 0-100
         ispg = 0.50 * beg - 0.30 * riesgo_int - 0.20 * riesgo_ext
-        ispg_norm = max(0, min(1, ispg))
-        if ispg_norm >= 0.75:
+        ispg_norm = max(0, min(100, ispg))
+        if ispg_norm >= 75:
             clasificacion = 'Verde'
-        elif ispg_norm >= 0.60:
+        elif ispg_norm >= 60:
             clasificacion = 'Amarillo'
         else:
             clasificacion = 'Rojo'
@@ -147,7 +170,7 @@ def main():
             'BEG': row['BEG'],
             'PRE_BEG': row['PRE_BEG'],
             'Riesgo_interno': round(riesgo_int, 3),
-            'Riesgo_externo': round(riesgo_ext, 3),
+            'Riesgo_externo': round(riesgo_ext, 3) if not pd.isna(riesgo_ext) else '',
             'ISPG': round(ispg, 3),
             'ISPG_norm': round(ispg_norm, 3),
             'Clasificacion': clasificacion,
