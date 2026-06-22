@@ -2,7 +2,10 @@
 
 **Fecha:** 2026-06-22
 **Rama:** `feat/streamlit-simulador` (basada en `origin/simulador`)
-**Estado:** hallazgo **señalado, NO corregido** (pendiente de decisión de Cynthia).
+**Estado:**
+- Hallazgo 1 (orden lectura/escritura) → **CORREGIDO** (aprobado por Cynthia).
+- Hallazgo 2 (índice no único en el mapeo, enmascarado por el 1) → **CORREGIDO** (aprobado por Cynthia).
+- Hallazgo 3 (selección de cohortes para el riesgo externo global) → **señalado, NO corregido** (pendiente de decisión de Cynthia; es lógica del indicador ISPG).
 
 Este registro documenta un bug **pre-existente** en `main.py` que salió a la luz al
 poder ejecutar por primera vez el pipeline completo del modelo nuevo. En la rama
@@ -69,14 +72,74 @@ que el efecto es académicamente relevante, no cosmético.
 - Los stubs de exportación funcionan: `export/riesgos_externos_{run_id}.csv` **sí se
   escribe** (línea ~344), solo que después de que se lo necesita.
 
-### Arreglo propuesto (NO aplicado)
-Es un cambio de **una línea de orden**, sin tocar fórmulas ni el modelo académico.
-Dos opciones equivalentes:
-- **(A)** Mover la escritura `export_engine.export(riesgos_externos, f'riesgos_externos_{run_id}.csv')`
-  **antes** del bloque de lectura (~línea 320).
-- **(B)** En el bloque de lectura, usar directamente el DataFrame `riesgos_externos`
-  ya en memoria (o `ssd_core/config/riesgos_externos.csv`) en vez del archivo
-  `riesgos_externos_{run_id}.csv`.
+### Corrección aplicada (aprobada por Cynthia)
+Se aplicó la opción (A): se movió la escritura de `export/riesgos_externos_{run_id}.csv`
+a **antes** del bloque de lectura (instanciando `ExportEngine(export_dir)` inline, porque
+`export_engine` se define más abajo). Verificado: el bloque de lectura ya se ejecuta.
 
-**No se aplica** ninguna por ahora: toca el pipeline de cálculo de indicadores, así
-que requiere el visto bueno de Cynthia (reglas 1 y 3 de CLAUDE.md).
+---
+
+## Hallazgo 2: índice no único en el mapeo de trazabilidad (enmascarado por el 1)
+
+### Síntoma
+Al corregir el hallazgo 1, el bloque de lectura por fin se ejecutó y `main.py`
+**se cayó** con `InvalidIndexError: Reindexing only valid with uniquely valued Index objects`.
+
+### Causa raíz
+El bloque hacía:
+```python
+perfil_idx = perfil_logro.set_index('ID_EST')
+riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_idx['ID_Cohorte'])
+```
+`perfil_logro_individual.csv` tiene **muchas filas por estudiante** (~60: una por
+perfil/periodo), así que `set_index('ID_EST')` produce un índice **no único** y `.map()`
+sobre ese índice falla. El bug estaba **enmascarado** por el hallazgo 1: como el bloque
+nunca se ejecutaba, nunca se disparaba.
+
+### Corrección aplicada (aprobada por Cynthia)
+**No** se deduplican filas. Se **agrupa por `ID_Cohorte` (grupo) e `ID_EST` (individual)**:
+```python
+perfil_grp = perfil_logro.groupby(['ID_Cohorte', 'ID_EST'], as_index=False).first()
+riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_grp.set_index('ID_EST')['ID_Cohorte'])
+```
+Criterio de Cynthia: los estudiantes se agrupan por las variables que se repiten en
+todos los procesos — `ID_EST` para análisis individuales, `ID_Cohorte` para análisis
+por grupos, `PERIODO` para revisión temporal. Verificado: `riesgos_externos_individual.csv`
+se genera con `ID_Cohorte` y `Fecha_corte` correctos (ej. `E12 → O2018-1`).
+
+---
+
+## Hallazgo 3: el riesgo externo global usa cohortes sin egresados (NO corregido)
+
+### Síntoma
+Aun con los hallazgos 1 y 2 corregidos, **`Riesgo_externo` sigue en `0`** en
+`export/BEG_ISPG_M.csv` para todas las cohortes.
+
+### Causa raíz
+El `Riesgo_externo` de la tabla de indicadores **no proviene** del archivo individual que
+se arregló, sino del cálculo del indicador en `calcular_ispg.py` (línea ~146) y, de forma
+idéntica, en `main.py` (línea ~543):
+```python
+cohortes_ordenadas = sorted(resumen_df['ID_Cohorte'].unique(), reverse=True)
+cohortes_ultimos_5 = cohortes_ordenadas[:5]   # las 5 cohortes MÁS RECIENTES de todas
+valores_ultimos_5 = riesgos_ext[riesgos_ext['ID_Cohorte'].isin(cohortes_ultimos_5)]['riesgo_externo']
+riesgo_ext_global = np.median(valores_ultimos_5) if len(valores_ultimos_5) > 0 else np.nan
+```
+El "riesgo externo global" se calcula como la mediana de **las 5 cohortes más recientes**
+(`O2025-2, O2025-1, O2024-2, O2024-1, O2023-2`). Pero el riesgo externo
+(empleabilidad/satisfacción) **solo existe para egresados**, que están en las cohortes
+**viejas** (2018-1 … 2022-1). Las 5 más recientes **no tienen egresados**, así que
+`valores_ultimos_5` queda vacío → `riesgo_ext_global = nan` → `Riesgo_externo = 0`.
+
+Confirmado con datos: las 9 cohortes con egresados (2018-1…2022-1) **no se solapan** con
+las 5 que el cálculo considera "recientes".
+
+### Efecto en la tesis
+Mismo efecto que el hallazgo 1 sobre el ISPG: con `Riesgo_externo = 0` el término
+`− 0.20 · Riesgo_externo` desaparece y el **ISPG sale más alto de lo que debería**.
+
+### Arreglo propuesto (NO aplicado)
+Probablemente: tomar **las 5 cohortes graduadas más recientes** (las que tienen egresados)
+en vez de "las 5 más recientes en absoluto". Pero esto cambia **la lógica del indicador
+ISPG** (qué cohortes definen el riesgo externo global) → es decisión de Cynthia
+(reglas 1 y 3 de CLAUDE.md). **No se aplica.**
