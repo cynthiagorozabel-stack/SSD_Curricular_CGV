@@ -316,15 +316,25 @@ def main(carrera_id):
         print(f"[WARN] No se pudo exportar alpha_cronbach automáticamente: {e}")
 
     # Exportar riesgos externos individuales (estudiante x riesgo)
+    # FIX (aprobado por Cynthia): escribir el archivo de riesgos externos ANTES de
+    # leerlo. Antes la escritura estaba más abajo con el mismo run_id, así que la
+    # lectura siempre fallaba y Riesgo_externo quedaba en 0.
+    ExportEngine(export_dir).export(riesgos_externos, f'riesgos_externos_{run_id}.csv')
     # Buscar el archivo de riesgos externos con el run_id actual
     riesgos_ext_path = f'export/riesgos_externos_{run_id}.csv'
     if os.path.exists(riesgos_ext_path):
         riesgos_ext = pd.read_csv(riesgos_ext_path)
-        # Añadir trazabilidad a riesgos externos: ID_Cohorte y Fecha_corte
-        if not perfil_logro.empty:
-            perfil_idx = perfil_logro.set_index('ID_EST')
-            riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_idx['ID_Cohorte']) if 'ID_Cohorte' in perfil_idx.columns else ''
-            riesgos_ext['Fecha_corte'] = riesgos_ext['estudiante_id'].map(perfil_idx['Fecha_corte']) if 'Fecha_corte' in perfil_idx.columns else ''
+        # Añadir trazabilidad a riesgos externos: ID_Cohorte y Fecha_corte.
+        # FIX (aprobado por Cynthia): NO deduplicar filas. Se agrupa por las
+        # variables que se repiten en el proceso —ID_Cohorte (grupo) e ID_EST
+        # (individual)— para construir el mapa estudiante->cohorte sin que el
+        # índice quede no único (antes set_index('ID_EST') sobre filas repetidas
+        # rompía el .map con InvalidIndexError).
+        if not perfil_logro.empty and 'ID_Cohorte' in perfil_logro.columns:
+            perfil_grp = perfil_logro.groupby(['ID_Cohorte', 'ID_EST'], as_index=False).first()
+            riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_grp.set_index('ID_EST')['ID_Cohorte'])
+            if 'Fecha_corte' in perfil_grp.columns:
+                riesgos_ext['Fecha_corte'] = riesgos_ext['estudiante_id'].map(perfil_grp.set_index('ID_EST')['Fecha_corte'])
         riesgos_ext.to_csv('export/riesgos_externos_individual.csv', index=False)
         print('Exportado: export/riesgos_externos_individual.csv')
 
@@ -341,7 +351,6 @@ def main(carrera_id):
     # =====================
     export_engine = ExportEngine(export_dir)
     export_engine.export(riesgos_internos, f'riesgos_internos_{run_id}.csv')
-    export_engine.export(riesgos_externos, f'riesgos_externos_{run_id}.csv')
 
     # Exportación avanzada para Power BI
     results = []
