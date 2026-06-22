@@ -1,0 +1,74 @@
+# Bitácora de cambios — 2026-06-22
+
+**Rama:** `feat/streamlit-simulador` (creada desde `origin/simulador`)
+**Objetivo:** adaptar la interfaz Streamlit al **modelo nuevo de Cynthia** (simulador
+longitudinal de `origin/simulador`), sin tocar el modelo académico.
+**Estado git:** todo en rama local, **sin push ni merge** (regla 4 de CLAUDE.md).
+
+---
+
+## Contexto
+Cynthia subió `origin/simulador` con una reescritura completa del simulador a un modelo
+longitudinal real (reloj semestre a semestre, prerrequisitos, notas por capacidad, regla
+de 3 reprobaciones, graduación = aprobar toda la malla). Confirmó que quiere la interfaz
+adaptada a ESE modelo, no al anterior. Esta rama hace esa adaptación.
+
+## Cambios realizados
+
+### Frente 1 — Stubs de exportación (`aa1719e`)
+- Se agregaron `ssd_core/export/{__init__,powerbi_export,advanced_export}.py`.
+- Su `main.py` los importaba (`ExportEngine`, `export_advanced`) pero **faltaban** en la
+  rama `simulador`, así que el pipeline nunca había podido ejecutarse. Con los stubs, corre.
+- Firmas compatibles con el uso real: `ExportEngine(dir).export(data, file)` y
+  `export_advanced(results, dir, file)`.
+- Se forzó el `git add` porque `.gitignore` ignora `ssd_core/export/`; es código fuente y
+  debe versionarse.
+
+### Frente 2 — Interfaz adaptada (`5199186`, `297256a`)
+- `app.py`: el paso 3 del pipeline apunta a `main.py` en la raíz (en la rama `simulador`
+  `main.py` se movió fuera de `ssd_core/`).
+- Panel de parámetros del modelo nuevo: **año de inicio y año de fin como campos
+  separados**, estudiantes por cohorte y máximo de materias por semestre.
+- Se quitaron los controles/variables de entorno del modelo viejo que este simulador ignoraba.
+- Se conserva el botón "Exportar para Power BI" (esquema estrella verificado: las 3
+  dimensiones y los hechos existen con los mismos nombres).
+- Se agregó una **nota visible** recordando que copiar los datos simulados a
+  `ssd_core/config/` es un **paso manual** (decisión de Cynthia; la UI no lo automatiza).
+
+### Frente 3 — Parametrización del simulador (`2a2ef47`)
+- En `simular_matriculacion.py` se levantaron a variable de entorno, con **default = valor
+  original del modelo**:
+  - `SSD_ANIO_INICIO` / `SSD_ANIO_FIN` (ventana 2018–2026)
+  - `SSD_N_ESTUDIANTES_COHORTE` (25)
+  - `SSD_MAX_MATERIAS_SEMESTRE` (6)
+- El corte de ingreso de cohortes se ató a `ANIO_FIN - 1` (antes literal `2025`), para que
+  se mueva con el parámetro en vez de quedar fijo.
+- **No** se tocaron fórmulas, lógica del modelo ni la **trazabilidad** (`Fecha_matriculacion`,
+  `Fecha_carga`, `Periodo`, etc. — estándar de calidad de datos de Cynthia).
+- **No-regresión verificada byte a byte**: con los defaults y semilla fija, la salida del
+  simulador es idéntica a la de `origin/simulador` (mismo sha256).
+
+### Correcciones aprobadas en `main.py` (`3e3804d`)
+Dos bugs **pre-existentes** del pipeline de riesgos externos, que salieron a la luz al
+poder ejecutar el pipeline por primera vez. Aprobados por Cynthia (ver `BITACORA_HALLAZGOS.md`):
+1. **Orden lectura/escritura:** se escribe `export/riesgos_externos_{run_id}.csv` antes de
+   leerlo. Antes la lectura siempre fallaba y `riesgos_externos_individual.csv` no se generaba.
+2. **Mapeo por agrupación (no deduplicación):** se agrupa por `ID_Cohorte` e `ID_EST` para
+   evitar el `InvalidIndexError` por índice no único.
+- Verificado: el pipeline corre completo y `riesgos_externos_individual.csv` se genera con
+  `ID_Cohorte` y `Fecha_corte` correctos.
+
+### Documentación (`fff1d64`, `5b3912b`)
+- `BITACORA_HALLAZGOS.md`: registro técnico de los 3 hallazgos (1 y 2 corregidos; 3 pendiente).
+
+## Pendiente (decisión de Cynthia — NO se tocó)
+- **Hallazgo 3:** `Riesgo_externo` sigue en `0` en `BEG_ISPG_M.csv` porque el cálculo del
+  riesgo externo global toma "las 5 cohortes más recientes", que **no tienen egresados**
+  (los egresados están en las cohortes viejas). Es **lógica del indicador ISPG** (regla 1),
+  así que requiere el visto bueno de Cynthia. Detalle en `BITACORA_HALLAZGOS.md`.
+
+## Cómo correr la interfaz (Mac)
+```
+python3 -m pip install streamlit
+python3 -m streamlit run app.py
+```
