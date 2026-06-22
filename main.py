@@ -99,6 +99,18 @@ def main(carrera_id):
     # Homologar columnas de ID y asignaturas
     matric = matric.rename(columns={'Estudiante_ID':'ID_EST', 'Materia':'COD_ASIGNATURA'})
     comp_perfil = comp_perfil.rename(columns={'competencia_id': 'ID_COMP'})
+    # Derivar ID_Cohorte si no existe (solo para uso interno del script)
+    if 'ID_Cohorte' not in matric.columns:
+        def parse_period(period):
+            try:
+                year, sem = str(period).split('-')
+                return int(year), int(sem)
+            except Exception:
+                return (9999, 9999)
+        def earliest_period(group):
+            valid = [p for p in group.dropna().unique() if str(p).strip() != '']
+            return min(valid, key=parse_period) if valid else ''
+        matric['ID_Cohorte'] = matric.groupby('ID_EST')['Periodo'].transform(earliest_period).astype(str).apply(lambda p: f"O{p}" if p else '')
     # Mapear materias a RA
     materia_ra = asig.set_index('COD_ASIGNATURA')['RA'].to_dict()
     matric['RA'] = matric['COD_ASIGNATURA'].map(materia_ra)
@@ -483,12 +495,12 @@ def main(carrera_id):
             est_noveno = matric[(matric['ID_EST'].isin(ests_cohorte)) & (matric['Nivel'].str.upper() == 'NOVENO')]['ID_EST'].unique()
             grupo_noveno = grupo[grupo['ID_EST'].isin(est_noveno)]
             promedio_noveno = round(grupo_noveno['Logro_Perfil'].mean(), 2) if not grupo_noveno.empty else 0
-            beg = round(100 - promedio_noveno, 2) if promedio_noveno else ''
+            beg = round(100 - promedio_noveno, 2)
             # PRE_BEG: estudiantes con logros en OCTAVO nivel
             est_octavo = matric[(matric['ID_EST'].isin(ests_cohorte)) & (matric['Nivel'].str.upper() == 'OCTAVO')]['ID_EST'].unique()
             grupo_octavo = grupo[grupo['ID_EST'].isin(est_octavo)]
             promedio_octavo = round(grupo_octavo['Logro_Perfil'].mean(), 2) if not grupo_octavo.empty else 0
-            pre_beg = round(100 - promedio_octavo, 2) if promedio_octavo else ''
+            pre_beg = round(100 - promedio_octavo, 2)
             resumenes.append({
                 'ID_Cohorte': cohorte,
                 'N': N,

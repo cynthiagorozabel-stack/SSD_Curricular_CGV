@@ -54,6 +54,24 @@ def main():
 
     # --- Datos base (idéntico a main.py) ---
     matric = pd.read_csv(matric_path)
+    # Homologar columnas de matriculación histórica como en main.py (solo para uso interno)
+    if 'Estudiante_ID' in matric.columns:
+        matric['ID_EST'] = matric['Estudiante_ID']
+    if 'Periodo' not in matric.columns:
+        raise ValueError('El archivo de matriculación histórica debe contener la columna Periodo.')
+    # Derivar ID_Cohorte si no existe (idéntico a main.py)
+    if 'ID_Cohorte' not in matric.columns:
+        def parse_period(period):
+            try:
+                year, sem = str(period).split('-')
+                return int(year), int(sem)
+            except Exception:
+                return (9999, 9999)
+        def earliest_period(group):
+            valid = [p for p in group.dropna().unique() if str(p).strip() != '']
+            return min(valid, key=parse_period) if valid else ''
+        matric['ID_Cohorte'] = matric.groupby('ID_EST')['Periodo'].transform(earliest_period).astype(str).apply(lambda p: f"O{p}" if p else '')
+    
     perfil_logro = pd.read_csv(perfil_logro_path)
     if 'ID_Cohorte' not in perfil_logro.columns:
         raise ValueError('perfil_logro_individual.csv debe contener la columna ID_Cohorte.')
