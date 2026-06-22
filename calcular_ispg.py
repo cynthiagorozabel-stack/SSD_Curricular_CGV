@@ -141,16 +141,23 @@ def main():
         if pd.notna(max_ext) and max_ext <= 1:
             riesgos_ext['riesgo_externo'] = riesgos_ext['riesgo_externo'] * 100
 
-    # Riesgo externo global: mediana de las cohortes de los últimos 5 años
-    cohortes_ordenadas = sorted(resumen_df['ID_Cohorte'].unique(), reverse=True)
-    cohortes_ultimos_5 = cohortes_ordenadas[:5]
-    valores_ultimos_5 = (riesgos_ext[riesgos_ext['ID_Cohorte'].isin(cohortes_ultimos_5)]['riesgo_externo']
-                         if 'riesgo_externo' in riesgos_ext.columns else [])
+    # Riesgo externo global: PROMEDIO de los últimos 5 períodos con datos reales.
+    # FIX H3 (aprobado por Cynthia): se seleccionan los PERÍODOS que existen en los
+    # datos de riesgo externo (no las cohortes), se ordenan y se toman los últimos 5;
+    # si hay menos de 5 períodos con datos, se usan los que existan. No se incluyen
+    # períodos sin datos. Antes se usaban las 5 cohortes más recientes, que no tienen
+    # egresados → riesgo_externo quedaba vacío → 0.
+    if 'riesgo_externo' in riesgos_ext.columns and 'Periodo' in riesgos_ext.columns:
+        periodos_con_datos = sorted(riesgos_ext.loc[riesgos_ext['riesgo_externo'].notna(), 'Periodo'].unique())
+        periodos_ultimos_5 = periodos_con_datos[-5:]
+        valores_ultimos_5 = riesgos_ext[riesgos_ext['Periodo'].isin(periodos_ultimos_5)]['riesgo_externo'].dropna()
+    else:
+        valores_ultimos_5 = pd.Series(dtype=float)
     if len(valores_ultimos_5) > 0:
-        riesgo_ext_global = float(np.median(valores_ultimos_5))
+        riesgo_ext_global = float(np.mean(valores_ultimos_5))
     else:
         riesgo_ext_global = np.nan
-        print('Advertencia: no se encontraron valores de riesgo_externo para las cohortes recientes; se marcará como sin dato.')
+        print('Advertencia: no se encontraron períodos con datos de riesgo_externo; se marcará como sin dato.')
 
     riesgo_int_cohorte = (riesgos_int.groupby('ID_Cohorte')['riesgo_interno'].mean()
                           if 'riesgo_interno' in riesgos_int.columns else pd.Series(dtype=float))

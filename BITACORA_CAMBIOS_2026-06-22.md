@@ -58,14 +58,19 @@ poder ejecutar el pipeline por primera vez. Aprobados por Cynthia (ver `BITACORA
 - Verificado: el pipeline corre completo y `riesgos_externos_individual.csv` se genera con
   `ID_Cohorte` y `Fecha_corte` correctos.
 
-### Documentación (`fff1d64`, `5b3912b`)
-- `BITACORA_HALLAZGOS.md`: registro técnico de los 3 hallazgos (1 y 2 corregidos; 3 pendiente).
+### Corrección del Hallazgo 3 — riesgo externo por períodos (aprobada por Cynthia)
+- En `calcular_ispg.py` (~línea 144) y `main.py` (~línea 541) se reemplazó el cálculo del
+  **riesgo externo global**: antes tomaba "las 5 cohortes más recientes" (sin egresados →
+  vacío → `0`). Ahora calcula el **promedio (`np.mean`) de los últimos 5 períodos con datos
+  reales**, seleccionando por la columna `Periodo` del archivo de riesgo externo y usando
+  solo los períodos que tienen datos (si hay menos de 5, los que existan).
+- Confirmado por Cynthia: la agregación es **promedio**, no mediana; y la selección es por
+  **período**, no por cohorte.
+- **Verificado:** corrida limpia del pipeline → `Riesgo_externo` ya **no sale en `0`** en
+  `export/BEG_ISPG_M.csv` (78.207 con los datos actuales). Detalle en `BITACORA_HALLAZGOS.md`.
 
-## Pendiente (decisión de Cynthia — NO se tocó)
-- **Hallazgo 3:** `Riesgo_externo` sigue en `0` en `BEG_ISPG_M.csv` porque el cálculo del
-  riesgo externo global toma "las 5 cohortes más recientes", que **no tienen egresados**
-  (los egresados están en las cohortes viejas). Es **lógica del indicador ISPG** (regla 1),
-  así que requiere el visto bueno de Cynthia. Detalle en `BITACORA_HALLAZGOS.md`.
+### Documentación (`fff1d64`, `5b3912b`)
+- `BITACORA_HALLAZGOS.md`: registro técnico de los 3 hallazgos (los 3 corregidos y verificados).
 
 ## Cómo correr la interfaz (Mac)
 ```

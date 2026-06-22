@@ -5,7 +5,7 @@
 **Estado:**
 - Hallazgo 1 (orden lectura/escritura) → **CORREGIDO** (aprobado por Cynthia).
 - Hallazgo 2 (índice no único en el mapeo, enmascarado por el 1) → **CORREGIDO** (aprobado por Cynthia).
-- Hallazgo 3 (selección de cohortes para el riesgo externo global) → **señalado, NO corregido** (pendiente de decisión de Cynthia; es lógica del indicador ISPG).
+- Hallazgo 3 (selección de cohortes para el riesgo externo global) → **CORREGIDO** (aprobado por Cynthia con la lógica correcta: promedio por períodos con datos, no por cohortes).
 
 Este registro documenta un bug **pre-existente** en `main.py` que salió a la luz al
 poder ejecutar por primera vez el pipeline completo del modelo nuevo. En la rama
@@ -109,7 +109,7 @@ se genera con `ID_Cohorte` y `Fecha_corte` correctos (ej. `E12 → O2018-1`).
 
 ---
 
-## Hallazgo 3: el riesgo externo global usa cohortes sin egresados (NO corregido)
+## Hallazgo 3: el riesgo externo global usa cohortes sin egresados (CORREGIDO)
 
 ### Síntoma
 Aun con los hallazgos 1 y 2 corregidos, **`Riesgo_externo` sigue en `0`** en
@@ -138,8 +138,26 @@ las 5 que el cálculo considera "recientes".
 Mismo efecto que el hallazgo 1 sobre el ISPG: con `Riesgo_externo = 0` el término
 `− 0.20 · Riesgo_externo` desaparece y el **ISPG sale más alto de lo que debería**.
 
-### Arreglo propuesto (NO aplicado)
-Probablemente: tomar **las 5 cohortes graduadas más recientes** (las que tienen egresados)
-en vez de "las 5 más recientes en absoluto". Pero esto cambia **la lógica del indicador
-ISPG** (qué cohortes definen el riesgo externo global) → es decisión de Cynthia
-(reglas 1 y 3 de CLAUDE.md). **No se aplica.**
+### Corrección aplicada (aprobada por Cynthia)
+Cynthia aclaró la lógica correcta: **el riesgo externo NO se promedia por cohortes**, sino
+que se calcula como el **promedio de los últimos 5 períodos con datos reales** que existen
+en el archivo de riesgo externo. Si un período no tiene datos, no se incluye; si hay menos
+de 5 períodos con datos, se usan los que existan.
+
+El cálculo se reemplazó en `calcular_ispg.py` (línea ~144) y, de forma idéntica, en
+`main.py` (línea ~541):
+```python
+# antes: las 5 cohortes más recientes (sin egresados) → vacío → 0
+periodos_con_datos = sorted(riesgos_ext.loc[riesgos_ext['riesgo_externo'].notna(), 'Periodo'].unique())
+periodos_ultimos_5 = periodos_con_datos[-5:]
+valores_ultimos_5 = riesgos_ext[riesgos_ext['Periodo'].isin(periodos_ultimos_5)]['riesgo_externo'].dropna()
+riesgo_ext_global = float(np.mean(valores_ultimos_5))   # promedio, según criterio de Cynthia
+```
+Cambios respecto al original: (1) la selección pasa de `ID_Cohorte` a la columna `Periodo`
+de los datos de riesgo externo, tomando **solo períodos con datos**; (2) la agregación pasa
+de `np.median` a `np.mean` (**promedio**, confirmado por Cynthia).
+
+**Verificado tras la corrección:** corrida limpia del pipeline completo → `Riesgo_externo`
+ya **no sale en `0`** en `export/BEG_ISPG_M.csv`. Con los datos actuales (único período con
+datos = `2026-2`, 80 registros de egresados) el promedio es **78.207** para las 9 cohortes
+con BEG definido, y coincide con el cálculo manual de control.
