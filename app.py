@@ -159,6 +159,10 @@ if not rango_ok:
     st.warning("El 'Año de inicio' no puede ser posterior al 'Año de fin'.")
 
 st.subheader("2. Ejecución")
+st.info(
+    "📂 **Antes de arrancar:** copiá manualmente los archivos de datos simulados a "
+    "`ssd_core/config/`. La interfaz no automatiza ese paso (es intencional)."
+)
 if st.button("Arrancar análisis", type="primary", disabled=not rango_ok):
     with st.spinner("Ejecutando el pipeline completo…"):
         ok, paso, log = correr_pipeline(
