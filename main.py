@@ -538,6 +538,16 @@ def main(carrera_id):
                     riesgos_int['riesgo_interno'] = riesgos_int[['desempeño','repitencia','deserción']].mean(axis=1)
                 if 'empleabilidad' in riesgos_ext.columns:
                     riesgos_ext['riesgo_externo'] = riesgos_ext[['empleabilidad','satisfacción']].mean(axis=1)
+                # Escalar riesgos a 0-100 si están en 0-1 (las tres variables del ISPG deben
+                # estar en la misma escala 0-100, igual que en calcular_ispg.py).
+                if 'riesgo_interno' in riesgos_int.columns:
+                    max_int = riesgos_int['riesgo_interno'].max(skipna=True)
+                    if pd.notna(max_int) and max_int <= 1:
+                        riesgos_int['riesgo_interno'] = riesgos_int['riesgo_interno'] * 100
+                if 'riesgo_externo' in riesgos_ext.columns:
+                    max_ext = riesgos_ext['riesgo_externo'].max(skipna=True)
+                    if pd.notna(max_ext) and max_ext <= 1:
+                        riesgos_ext['riesgo_externo'] = riesgos_ext['riesgo_externo'] * 100
                 # Riesgo externo global: PROMEDIO de los últimos 5 períodos con datos reales.
                 # FIX H3 (aprobado por Cynthia): se seleccionan los PERÍODOS que existen en los datos
                 # de riesgo externo (no las cohortes), se ordenan y se toman los últimos 5; si hay menos
@@ -557,14 +567,18 @@ def main(carrera_id):
                 resumenes_final = []
                 for idx, row in resumen_df.iterrows():
                     cohorte = row['ID_Cohorte']
-                    beg = row['BEG']/100 if row['BEG'] > 1 else row['BEG']
+                    # Fórmula corregida (aprobada por Cynthia, 2026-06-22): las tres variables
+                    # están en escala 0-100. ISPG_raw = SUMA ponderada y el indicador final
+                    # que se guarda como "ISPG" es la Salud del sistema = 100 - ISPG_raw.
+                    beg = row['BEG']
                     riesgo_int = riesgo_int_cohorte.get(cohorte, 0)
                     riesgo_ext = riesgo_ext_global
-                    ispg = 0.50*beg - 0.30*riesgo_int - 0.20*riesgo_ext
-                    ispg_norm = max(0, min(1, ispg))
-                    if ispg_norm >= 0.75:
+                    ispg_raw = 0.50*beg + 0.30*riesgo_int + 0.20*riesgo_ext
+                    ispg = 100 - ispg_raw  # Salud del sistema (lo que se reporta como ISPG)
+                    ispg_norm = max(0, min(100, ispg))
+                    if ispg_norm >= 75:
                         clasificacion = 'Verde'
-                    elif ispg_norm >= 0.60:
+                    elif ispg_norm >= 60:
                         clasificacion = 'Amarillo'
                     else:
                         clasificacion = 'Rojo'

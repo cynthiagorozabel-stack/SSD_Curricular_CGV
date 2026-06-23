@@ -69,6 +69,26 @@ poder ejecutar el pipeline por primera vez. Aprobados por Cynthia (ver `BITACORA
 - **Verificado:** corrida limpia del pipeline → `Riesgo_externo` ya **no sale en `0`** en
   `export/BEG_ISPG_M.csv` (78.207 con los datos actuales). Detalle en `BITACORA_HALLAZGOS.md`.
 
+### Corrección de la fórmula del ISPG → Salud del sistema (aprobada por Cynthia)
+- Cynthia corrigió la fórmula del ISPG. La anterior era una **resta** ponderada
+  (`0.50·BEG − 0.30·Riesgo_interno − 0.20·Riesgo_externo`). La **correcta** es una
+  **suma** ponderada y un complemento a 100:
+  ```
+  ISPG_raw      = 0.50·BEG + 0.30·Riesgo_interno + 0.20·Riesgo_externo
+  Salud_sistema = 100 − ISPG_raw
+  ```
+- El campo que se guarda como `ISPG` en `export/BEG_ISPG_M.csv` ahora es
+  **`Salud_sistema`** (el `100 − ISPG_raw`), no el `ISPG_raw`.
+- Las **tres variables se usan en escala 0-100**. En `calcular_ispg.py` ya lo estaban.
+  En el **bloque gemelo de `main.py`** se alineó la escala: se reescalan los riesgos a
+  0-100 (igual que `calcular_ispg.py`) y se usa `BEG` directo (antes dividía `BEG/100` y
+  clasificaba en 0-1); ahora clasifica en 0-100 con umbrales 75/60, idéntico al otro archivo.
+- Pesos sin cambio: BEG 0.50, Riesgo_interno 0.30, Riesgo_externo 0.20.
+- **Verificado** con corrida limpia del pipeline completo. `Salud_sistema` para las 9
+  cohortes con egresados queda en **~65.8 – 67.2** (todas **Amarillo**); ejemplo
+  `O2018-1`: BEG 19.65, R_int 26.047, R_ext 77.297 → ISPG_raw 33.099 → **Salud 66.902**.
+  (Con la fórmula anterior de resta el ISPG salía negativo para estas cohortes.)
+
 ### Documentación (`fff1d64`, `5b3912b`)
 - `BITACORA_HALLAZGOS.md`: registro técnico de los 3 hallazgos (los 3 corregidos y verificados).
 

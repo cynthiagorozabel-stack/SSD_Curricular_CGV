@@ -178,8 +178,11 @@ def main():
         # Si faltan riesgos, tratarlos como 0 pero ya se imprimió advertencia para externo
         riesgo_int = 0 if pd.isna(riesgo_int) else riesgo_int
         riesgo_ext = 0 if pd.isna(riesgo_ext) else riesgo_ext
-        # Calcular ISPG en la escala 0-100
-        ispg = 0.50 * beg - 0.30 * riesgo_int - 0.20 * riesgo_ext
+        # Fórmula corregida (aprobada por Cynthia, 2026-06-22): las tres variables están
+        # en escala 0-100. El ISPG_raw es la SUMA ponderada (no resta) y el indicador final
+        # que se guarda como "ISPG" es la Salud del sistema = 100 - ISPG_raw.
+        ispg_raw = 0.50 * beg + 0.30 * riesgo_int + 0.20 * riesgo_ext
+        ispg = 100 - ispg_raw  # Salud del sistema (lo que se reporta como ISPG)
         ispg_norm = max(0, min(100, ispg))
         if ispg_norm >= 75:
             clasificacion = 'Verde'
