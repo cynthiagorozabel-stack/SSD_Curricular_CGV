@@ -129,7 +129,21 @@ def main():
     if 'desempeño' in riesgos_int.columns:
         riesgos_int['riesgo_interno'] = pd.to_numeric(riesgos_int[['desempeño', 'repitencia', 'deserción']].mean(axis=1), errors='coerce')
     if 'empleabilidad' in riesgos_ext.columns:
-        riesgos_ext['riesgo_externo'] = pd.to_numeric(riesgos_ext[['empleabilidad', 'satisfacción']].mean(axis=1), errors='coerce')
+        # Inversión aprobada por Cynthia (2026-06-22): empleabilidad y satisfacción son
+        # indicadores "buenos" (más alto = mejor). El riesgo externo es su COMPLEMENTO:
+        #   desempleo      = 100 - empleabilidad
+        #   insatisfacción = 100 - satisfacción
+        #   riesgo_externo = promedio(desempleo, insatisfacción)
+        # Las columnas crudas NO cambian de nombre ni de valor; solo cambia el cálculo interno.
+        emp = pd.to_numeric(riesgos_ext['empleabilidad'], errors='coerce')
+        sat = pd.to_numeric(riesgos_ext['satisfacción'], errors='coerce')
+        # La inversión 100-x asume escala 0-100; los datos crudos vienen en 0-1, así que se
+        # llevan a 0-100 antes de invertir (misma heurística max<=1 del bloque de escala).
+        max_raw = pd.concat([emp, sat]).max(skipna=True)
+        if pd.notna(max_raw) and max_raw <= 1:
+            emp = emp * 100
+            sat = sat * 100
+        riesgos_ext['riesgo_externo'] = ((100 - emp) + (100 - sat)) / 2
 
     # Escalar riesgos a 0-100 si están en 0-1
     if 'riesgo_interno' in riesgos_int.columns:

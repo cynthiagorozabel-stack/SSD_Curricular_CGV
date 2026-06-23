@@ -89,6 +89,33 @@ poder ejecutar el pipeline por primera vez. Aprobados por Cynthia (ver `BITACORA
   `O2018-1`: BEG 19.65, R_int 26.047, R_ext 77.297 → ISPG_raw 33.099 → **Salud 66.902**.
   (Con la fórmula anterior de resta el ISPG salía negativo para estas cohortes.)
 
+### Inversión del riesgo externo: complemento de empleabilidad/satisfacción (aprobada por Cynthia)
+- Cynthia aclaró que `empleabilidad` y `satisfacción` son indicadores **"buenos"** (más
+  alto = mejor), así que el **riesgo externo es su complemento**, no su promedio directo.
+  Antes de promediar se invierten:
+  ```
+  desempleo      = 100 - empleabilidad
+  insatisfacción = 100 - satisfacción
+  riesgo_externo = promedio(desempleo, insatisfacción)
+  ```
+- Cambio aplicado **solo** en el cálculo interno de `calcular_ispg.py` (~línea 131) y el
+  bloque gemelo de `main.py` (~línea 539). **No** se tocó `simular_riesgos.py` ni los
+  **nombres de columnas** en los archivos de salida: las columnas crudas siguen siendo
+  `empleabilidad` y `satisfacción` con sus valores originales (la trazabilidad de
+  `main.py:446` registra el valor crudo sin cambios).
+- **Verificación de no-interferencia (pedida por Cynthia):** las únicas fórmulas que
+  consumen esas columnas son los dos bloques de riesgo externo. `main.py:446` solo las
+  registra como valor crudo para auditoría y `simular_riesgos.py` solo las genera; ninguna
+  otra fórmula/análisis las usa.
+- Escala: los datos crudos vienen en **0-1** (N(0.8,0.1) y N(0.75,0.12)). Para aplicar
+  `100 - x` fielmente se llevan a 0-100 antes de invertir (misma heurística `max<=1` del
+  bloque de escala existente). El `riesgo_externo` resultante ya queda en 0-100.
+- **Efecto verificado** (corrida limpia del pipeline completo): `Riesgo_externo` pasó de
+  **77.3 → 22.784** (≈ 100 − 77.3, como se esperaba). Con la suma ponderada del ISPG, la
+  **Salud del sistema sube a ~76.3 – 79.7** (las 9 cohortes con egresados pasan de
+  **Amarillo** a **Verde**). Ejemplo `O2018-1`: BEG 21.09, R_int 25.77, R_ext 22.784 →
+  ISPG_raw 22.833 → **Salud 77.167** (Verde).
+
 ### Documentación (`fff1d64`, `5b3912b`)
 - `BITACORA_HALLAZGOS.md`: registro técnico de los 3 hallazgos (los 3 corregidos y verificados).
 
