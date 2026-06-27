@@ -207,5 +207,5 @@ if __name__ == "__main__":
                     if est['Abandono'] == 1:
                         break
 
-    print(f"[OK] Simulación finalizada.")
-    print(f"[INFO] Registros históricos generados en paralelo: {total_rows}")
+    print(f"[OK] Simulacion finalizada.")
+    print(f"[INFO] Registros historicos generados en paralelo: {total_rows}")
