@@ -6,6 +6,7 @@
 - Hallazgo 1 (orden lectura/escritura) → **CORREGIDO** (aprobado por Cynthia).
 - Hallazgo 2 (índice no único en el mapeo, enmascarado por el 1) → **CORREGIDO** (aprobado por Cynthia).
 - Hallazgo 3 (selección de cohortes para el riesgo externo global) → **CORREGIDO** (aprobado por Cynthia con la lógica correcta: promedio por períodos con datos, no por cohortes).
+- Hallazgo 5 (perfiles idénticos en períodos con un solo RA) → **NO es un bug; escasez de datos.** Decisión de modelado **pendiente de Cynthia**.
 
 Este registro documenta un bug **pre-existente** en `main.py` que salió a la luz al
 poder ejecutar por primera vez el pipeline completo del modelo nuevo. En la rama
@@ -161,3 +162,53 @@ de `np.median` a `np.mean` (**promedio**, confirmado por Cynthia).
 ya **no sale en `0`** en `export/BEG_ISPG_M.csv`. Con los datos actuales (único período con
 datos = `2026-2`, 80 registros de egresados) el promedio es **78.207** para las 9 cohortes
 con BEG definido, y coincide con el cálculo manual de control.
+
+---
+
+## Hallazgo 5: perfiles idénticos en períodos con un solo RA (NO es bug — escasez de datos)
+
+### Contexto
+Surge al verificar el fix del `Logro_Perfil` por competencia (commit `3823208`: mapeo real
+RA→competencia desde `ra_competencia.csv` + promedio ponderado por `peso` de
+`competencia_perfil.csv`). El fix corrige el bug previo en que `Logro_Perfil` salía
+**replicado e idéntico en P1–P12** para todos los estudiantes y períodos.
+
+### Síntoma observable
+Tras el fix, en `export/perfil_logro_individual.csv`, un estudiante puede mostrar perfiles
+**diferenciados** en unos períodos y **todos iguales** en otro. Ejemplo real (E1):
+
+| Período | RA con datos | Competencias con dato | Perfiles P1–P12 |
+|---|---|---|---|
+| 2018-1 | 5 RA | 3 comps | **diferenciados** (60.07–62.63) |
+| 2018-2 | 5 RA | 3 comps | **diferenciados** (59.45–65.10) |
+| 2019-1 | **1 RA** (RA5=56) | **1 comp** (56.0) | **todos 56.0** |
+
+### Causa raíz (NO es un bug del fix)
+Es **escasez de datos**, no lógica defectuosa. La cadena en 2019-1:
+
+```
+1 RA (RA5 = 56)  →  1 competencia con dato (= 56.0)  →  los 12 perfiles = 56.0
+```
+
+Cuando solo hay datos para **una** competencia, cada perfil que la incluye calcula un promedio
+ponderado sobre **un único valor** → devuelve ese valor (56.0) sin importar el `peso`. Si esa
+competencia pertenece a los 12 perfiles, los 12 reportan 56.0.
+
+Esto es **cualitativamente distinto** del bug viejo: aquel daba valores idénticos **aun con
+datos ricos** (5 RA / 3 comps) porque el filtro RA→competencia usaba `asig` (sin `ID_COMP`) y
+tomaba todos los RA. El fix lo demuestra: con 5 RA / 3 comps los perfiles **sí se diferencian**;
+el `56.0` uniforme solo aparece cuando el período tiene un único RA registrado.
+
+### Efecto / caveat de modelado
+Cuando un perfil se calcula con **una sola** de las competencias que lo componen, el
+`Logro_Perfil` reporta el valor de esa única competencia como si fuera todo el perfil →
+**sobre-representa** con cobertura parcial.
+
+### Decisión PENDIENTE de Cynthia (3 opciones)
+1. **Umbral de cobertura mínima:** no emitir `Logro_Perfil` si faltan datos para un % de las
+   competencias del perfil (p. ej. < 50% de cobertura).
+2. **Columna de cobertura:** añadir `n_comps_con_dato / n_comps_perfil` para que Power BI pueda
+   filtrar o ponderar la confianza del valor.
+3. **Dejarlo como está:** aceptar "logro parcial con los datos disponibles".
+
+No se aplica ningún cambio de código hasta que Cynthia decida.
