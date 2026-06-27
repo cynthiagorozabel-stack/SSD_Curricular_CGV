@@ -19,6 +19,17 @@ ssd_core/data/processed/
 ssd_core/audit/
 ssd_core/export/
 
+# Artefactos generados por main.py / calcular_ispg.py (raiz) — no versionar
+audit/
+powerbi_export/
+output.log
+debug_profile_calc.py
+
+# Salidas por run_id (UUID) — ruido de cada corrida
+export/alpha_cronbach_*.json
+export/riesgos_externos_*-*-*-*-*.csv
+export/riesgos_internos_*-*-*-*-*.csv
+
 # OS
 .DS_Store
 Thumbs.db
