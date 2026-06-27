@@ -7,13 +7,16 @@ if __name__ == "__main__":
     import numpy as np
 
     # === Parámetros de la simulación institucional ===
-    N_ESTUDIANTES_POR_COHORTE = 25  # Cada semestre entra un grupo nuevo y único
+    # Estos valores se pueden ajustar desde la interfaz (Streamlit) por variable de
+    # entorno. El default es exactamente el valor original del modelo, de modo que
+    # sin definir nada el comportamiento es idéntico al de la versión hardcodeada.
+    N_ESTUDIANTES_POR_COHORTE = int(os.environ.get('SSD_N_ESTUDIANTES_COHORTE', 25))  # Cada semestre entra un grupo nuevo y único
     CARRERA = 'Ingenieria Industrial'
     ID_CARRERA = 103
     ESTADOS = ['Alto', 'Medio', 'Bajo']
     GENERO = ['M', 'F']
     MIN_APROBADO = 70
-    MAX_MATERIAS_SEMESTRE = 6
+    MAX_MATERIAS_SEMESTRE = int(os.environ.get('SSD_MAX_MATERIAS_SEMESTRE', 6))
 
     # 1. Cargar la estructura de la Malla desde asignaturas.csv
     asig_path = 'ssd_core/config/asignaturas.csv'
@@ -52,8 +55,10 @@ if __name__ == "__main__":
     }
 
     # 2. Definición de la Línea de Tiempo Institucional (Ecosistema Concurrente)
-    ANIO_INICIO = 2018
-    ANIO_FIN = 2026
+    # Año de inicio y de fin de la ventana de simulación. Parametrizables desde la
+    # interfaz; default = ventana original del modelo (2018-2026).
+    ANIO_INICIO = int(os.environ.get('SSD_ANIO_INICIO', 2018))
+    ANIO_FIN = int(os.environ.get('SSD_ANIO_FIN', 2026))
     PERIODOS_ACADEMICOS = []
     for anio in range(ANIO_INICIO, ANIO_FIN + 1):
         PERIODOS_ACADEMICOS.append(f"{anio}-1")
@@ -64,8 +69,10 @@ if __name__ == "__main__":
 
     # Pre-crear y registrar todas las cohortes únicas que ingresarán en sus respectivos años
     for periodo_ingreso in PERIODOS_ACADEMICOS:
-        # Dejamos de ingresar nuevas cohortes en los últimos periodos para no saturar con datos incompletos
-        if int(periodo_ingreso.split('-')[0]) > 2025:
+        # Dejamos de ingresar nuevas cohortes en el último año de la ventana para no
+        # saturar con datos incompletos. Atado a ANIO_FIN (default 2026 -> corte 2025),
+        # así el corte se mueve con el parámetro en vez de quedar fijo en 2025.
+        if int(periodo_ingreso.split('-')[0]) > ANIO_FIN - 1:
             continue
             
         for _ in range(N_ESTUDIANTES_POR_COHORTE):

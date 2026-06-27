@@ -117,47 +117,73 @@ def main(carrera_id):
     # Filtrar solo filas con RA válido y nota numérica
     matric = matric[matric['RA'].notnull() & matric['Nota'].apply(lambda x: str(x).replace('.','',1).isdigit())]
     matric['Nota'] = matric['Nota'].astype(float)
-    # Calcular nivel de logro por estudiante y RA (promedio de notas)
-    ra_logro = matric.groupby(['ID_EST','RA']).agg({'Nota':'mean'}).reset_index()
+    # Calcular nivel de logro por estudiante, RA y Periodo (promedio de notas por periodo)
+    ra_logro = matric.groupby(['ID_EST','RA','Periodo']).agg({'Nota':'mean'}).reset_index()
     ra_logro = ra_logro.rename(columns={'Nota':'Logro_RA'})
     ra_logro['Fecha_corte'] = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-    # Agregar ID_Cohorte y Nivel a ra_logro
-    id_cohorte_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict()
-    nivel_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Nivel'].to_dict() if 'Nivel' in matric.columns else {}
-    ra_logro['ID_Cohorte'] = ra_logro['ID_EST'].map(id_cohorte_map)
-    ra_logro['Nivel'] = ra_logro['ID_EST'].map(nivel_map) if nivel_map else ''
-    # Calcular logro de competencia por estudiante
+    # Agregar ID_Cohorte y Nivel a ra_logro por estudiante y periodo
+    id_period_map = matric.drop_duplicates(['ID_EST','Periodo'])[['ID_EST','Periodo','ID_Cohorte','Nivel']]
+    ra_logro = ra_logro.merge(id_period_map, on=['ID_EST','Periodo'], how='left')
+
+    # Construir mapeo competencia -> RAs usando ra_data (ra_competencia.csv)
+    comp_to_ra = {}
+    ra_column = None
+    for candidate in ['RA', 'ID_RA', 'ra_id']:
+        if candidate in ra_data.columns:
+            ra_column = candidate
+            break
+    if ra_column and 'ID_COMP' in ra_data.columns:
+        comp_to_ra = ra_data.dropna(subset=['ID_COMP']).groupby('ID_COMP')[ra_column].unique().to_dict()
+ 
+    # Calcular logro de competencia por estudiante y periodo (usando solo RAs asociados a cada competencia)
     comp_logro = []
-    for est in ra_logro['ID_EST'].unique():
-        est_ra = ra_logro[ra_logro['ID_EST']==est]
+    for (est, periodo), est_ra in ra_logro.groupby(['ID_EST','Periodo']):
         for comp in comp_perfil['ID_COMP'].unique():
-            # Buscar todos los RA asociados a esta competencia
-            ra_asociados = asig[(asig['RA'].notnull()) & (asig['RA'].str.startswith('RA')) & (asig['RA'].isin(est_ra['RA']))]['RA'].unique().tolist()
+            # RA asociados a esta competencia
+            ra_asociados = [r for r in comp_to_ra.get(comp, []) if r in est_ra['RA'].values]
             ra_vals = est_ra[est_ra['RA'].isin(ra_asociados)]['Logro_RA']
             if not ra_vals.empty:
-                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Cohorte': id_cohorte_map.get(est, ''), 'Nivel': nivel_map.get(est, '') if nivel_map else ''})
-    comp_logro = pd.DataFrame(comp_logro)
-    # Calcular perfil por estudiante y periodo (suma ponderada de competencias)
-    # Extraer nivel y periodo desde matriculacion_historica_test.csv
+                comp_logro.append({
+                    'ID_EST': est,
+                    'Periodo': periodo,
+                    'ID_COMP': comp,
+                    'Logro_Competencia': ra_vals.mean(),
+                    'Fecha_corte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'ID_Cohorte': est_ra['ID_Cohorte'].iloc[0] if 'ID_Cohorte' in est_ra.columns else '',
+                    'Nivel': est_ra['Nivel'].iloc[0] if 'Nivel' in est_ra.columns else ''
+                })
+    comp_logro = pd.DataFrame(comp_logro, columns=['ID_EST','Periodo','ID_COMP','Logro_Competencia','Fecha_corte','ID_Cohorte','Nivel'])
+    
+    # Calcular perfil por estudiante y periodo (promedio PONDERADO de las competencias que componen cada perfil)
     perfil_logro = []
     for (est, periodo), grupo_m in matric.groupby(['ID_EST', 'Periodo']):
         nivel = grupo_m['Nivel'].iloc[0] if 'Nivel' in grupo_m.columns else ''
         id_cohorte = grupo_m['ID_Cohorte'].iloc[0] if 'ID_Cohorte' in grupo_m.columns else ''
         # Calcular logros de competencia para este estudiante y periodo
-        est_comp = comp_logro[comp_logro['ID_EST'] == est]
+        est_comp = comp_logro[(comp_logro['ID_EST'] == est) & (comp_logro['Periodo'] == periodo)]
         for perfil in comp_perfil['perfil_id'].unique():
-            compas = comp_perfil[comp_perfil['perfil_id'] == perfil]['ID_COMP']
-            vals = est_comp[est_comp['ID_COMP'].isin(compas)]['Logro_Competencia']
-            if not vals.empty:
-                perfil_logro.append({
-                    'ID_EST': est,
-                    'ID_PERFIL': perfil,
-                    'Periodo': periodo,
-                    'Nivel': nivel,
-                    'ID_Cohorte': id_cohorte,
-                    'Logro_Perfil': vals.mean(),
-                    'Fecha_corte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-                })
+            # Obtener competencias y sus pesos para este perfil
+            perfil_comp_pesos = comp_perfil[comp_perfil['perfil_id'] == perfil][['ID_COMP', 'peso']]
+            # Obtener logros del estudiante para estas competencias
+            comp_scores = est_comp[est_comp['ID_COMP'].isin(perfil_comp_pesos['ID_COMP'].values)]
+            
+            if not comp_scores.empty:
+                # Merge logros con pesos
+                comp_scores_merged = comp_scores.merge(perfil_comp_pesos, on='ID_COMP', how='inner')
+                if not comp_scores_merged.empty:
+                    # Promedio ponderado: sum(logro * peso) / sum(pesos)
+                    weighted_sum = (comp_scores_merged['Logro_Competencia'] * comp_scores_merged['peso']).sum()
+                    weight_sum = comp_scores_merged['peso'].sum()
+                    logro_perfil = weighted_sum / weight_sum if weight_sum > 0 else comp_scores_merged['Logro_Competencia'].mean()
+                    perfil_logro.append({
+                        'ID_EST': est,
+                        'ID_PERFIL': perfil,
+                        'Periodo': periodo,
+                        'Nivel': nivel,
+                        'ID_Cohorte': id_cohorte,
+                        'Logro_Perfil': logro_perfil,
+                        'Fecha_corte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+                    })
     perfil_logro = pd.DataFrame(perfil_logro)
 
     # Calcular PERFIL_Promedio único por estudiante: solo el último periodo y nivel más alto
@@ -209,12 +235,12 @@ def main(carrera_id):
     if 'RA_ID' in ra_data.columns and 'RA' in ra_data.columns:
         ra_id_map = ra_data.drop_duplicates('RA')[['RA', 'RA_ID']].set_index('RA')['RA_ID'].to_dict()
     ra_logro['RA_ID'] = ra_logro['RA'].map(ra_id_map) if ra_id_map else ra_logro['RA']
-    ra_cols = ['ID_EST', 'RA_ID', 'RA', 'Logro_RA', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
+    ra_cols = ['ID_EST', 'RA_ID', 'RA', 'Periodo', 'Logro_RA', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
     ra_export = ra_logro[ra_cols] if all(col in ra_logro.columns for col in ra_cols) else ra_logro
     ra_export.to_csv('export/ra_logro_individual.csv', index=False)
 
-    # Exportar competencia_logro_individual con ID_Cohorte
-    comp_cols = ['ID_EST', 'ID_COMP', 'Logro_Competencia', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
+    # Exportar competencia_logro_individual con ID_Cohorte y Periodo
+    comp_cols = ['ID_EST', 'ID_COMP', 'Periodo', 'Logro_Competencia', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
     comp_export = comp_logro[comp_cols] if all(col in comp_logro.columns for col in comp_cols) else comp_logro
     comp_export.to_csv('export/competencia_logro_individual.csv', index=False)
     perfil_logro.to_csv('export/perfil_logro_individual.csv', index=False)
@@ -238,8 +264,9 @@ def main(carrera_id):
     # =====================
     # Exportar matriz de logros individuales y riesgos externos individuales
     # =====================
-    # Matriz de logros RA (estudiante x RA)
-    ra_matrix = ra_logro.pivot(index='ID_EST', columns='RA', values='Logro_RA')
+    # Matriz de logros RA (estudiante x RA) usando el último periodo por estudiante
+    ra_logro_last = ra_logro.sort_values('Periodo').drop_duplicates('ID_EST', keep='last')
+    ra_matrix = ra_logro_last.pivot(index='ID_EST', columns='RA', values='Logro_RA')
     # Agregar desempeño, repitencia, deserción, perfil, periodo, fechas
     # Desempeño, repitencia, deserción ya calculados en riesgos_int_export
     perfil_logro_idx = perfil_logro.set_index('ID_EST') if 'ID_EST' in perfil_logro.columns else pd.DataFrame()
@@ -255,9 +282,10 @@ def main(carrera_id):
         for col in ['desempeño','repitencia','deserción']:
             if col in riesgos_int_export.set_index('ID_EST').columns:
                 ra_matrix_expanded[col] = ra_matrix_expanded['ID_EST'].map(riesgos_int_export.set_index('ID_EST')[col])
-        # Agregar columnas de logros por competencia para cada estudiante
+        # Agregar columnas de logros por competencia para cada estudiante (último periodo)
         if not comp_logro.empty:
-            comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
+            comp_logro_last = comp_logro.sort_values('Periodo').drop_duplicates('ID_EST', keep='last')
+            comp_matrix = comp_logro_last.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
             comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
             ra_matrix_expanded = ra_matrix_expanded.join(comp_matrix, on='ID_EST', how='left')
         # Exportar
@@ -275,7 +303,8 @@ def main(carrera_id):
         if 'ID_PERFIL' in perfil_logro_idx.columns:
             full_matrix['ID_PERFIL'] = perfil_logro_idx['ID_PERFIL']
         if not comp_logro.empty:
-            comp_matrix = comp_logro.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
+            comp_logro_last = comp_logro.sort_values('Periodo').drop_duplicates('ID_EST', keep='last')
+            comp_matrix = comp_logro_last.pivot(index='ID_EST', columns='ID_COMP', values='Logro_Competencia')
             comp_matrix.columns = [f'COMP_{col}' for col in comp_matrix.columns]
             full_matrix = full_matrix.join(comp_matrix, how='left')
         if 'Fecha_corte' in perfil_logro_idx.columns:
@@ -316,15 +345,25 @@ def main(carrera_id):
         print(f"[WARN] No se pudo exportar alpha_cronbach automáticamente: {e}")
 
     # Exportar riesgos externos individuales (estudiante x riesgo)
+    # FIX (aprobado por Cynthia): escribir el archivo de riesgos externos ANTES de
+    # leerlo. Antes la escritura estaba más abajo con el mismo run_id, así que la
+    # lectura siempre fallaba y Riesgo_externo quedaba en 0.
+    ExportEngine(export_dir).export(riesgos_externos, f'riesgos_externos_{run_id}.csv')
     # Buscar el archivo de riesgos externos con el run_id actual
     riesgos_ext_path = f'export/riesgos_externos_{run_id}.csv'
     if os.path.exists(riesgos_ext_path):
         riesgos_ext = pd.read_csv(riesgos_ext_path)
-        # Añadir trazabilidad a riesgos externos: ID_Cohorte y Fecha_corte
-        if not perfil_logro.empty:
-            perfil_idx = perfil_logro.set_index('ID_EST')
-            riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_idx['ID_Cohorte']) if 'ID_Cohorte' in perfil_idx.columns else ''
-            riesgos_ext['Fecha_corte'] = riesgos_ext['estudiante_id'].map(perfil_idx['Fecha_corte']) if 'Fecha_corte' in perfil_idx.columns else ''
+        # Añadir trazabilidad a riesgos externos: ID_Cohorte y Fecha_corte.
+        # FIX (aprobado por Cynthia): NO deduplicar filas. Se agrupa por las
+        # variables que se repiten en el proceso —ID_Cohorte (grupo) e ID_EST
+        # (individual)— para construir el mapa estudiante->cohorte sin que el
+        # índice quede no único (antes set_index('ID_EST') sobre filas repetidas
+        # rompía el .map con InvalidIndexError).
+        if not perfil_logro.empty and 'ID_Cohorte' in perfil_logro.columns:
+            perfil_grp = perfil_logro.groupby(['ID_Cohorte', 'ID_EST'], as_index=False).first()
+            riesgos_ext['ID_Cohorte'] = riesgos_ext['estudiante_id'].map(perfil_grp.set_index('ID_EST')['ID_Cohorte'])
+            if 'Fecha_corte' in perfil_grp.columns:
+                riesgos_ext['Fecha_corte'] = riesgos_ext['estudiante_id'].map(perfil_grp.set_index('ID_EST')['Fecha_corte'])
         riesgos_ext.to_csv('export/riesgos_externos_individual.csv', index=False)
         print('Exportado: export/riesgos_externos_individual.csv')
 
@@ -341,7 +380,6 @@ def main(carrera_id):
     # =====================
     export_engine = ExportEngine(export_dir)
     export_engine.export(riesgos_internos, f'riesgos_internos_{run_id}.csv')
-    export_engine.export(riesgos_externos, f'riesgos_externos_{run_id}.csv')
 
     # Exportación avanzada para Power BI
     results = []
@@ -528,27 +566,59 @@ def main(carrera_id):
                 if 'desempeño' in riesgos_int.columns:
                     riesgos_int['riesgo_interno'] = riesgos_int[['desempeño','repitencia','deserción']].mean(axis=1)
                 if 'empleabilidad' in riesgos_ext.columns:
-                    riesgos_ext['riesgo_externo'] = riesgos_ext[['empleabilidad','satisfacción']].mean(axis=1)
-                # Calcular riesgo externo global: mediana de los riesgos externos de los estudiantes de las cohortes de los últimos 5 años
-                cohortes_ordenadas = sorted(resumen_df['ID_Cohorte'].unique(), reverse=True)
-                cohortes_ultimos_5 = cohortes_ordenadas[:5]
-                valores_ultimos_5 = riesgos_ext[riesgos_ext['ID_Cohorte'].isin(cohortes_ultimos_5)]['riesgo_externo'] if 'riesgo_externo' in riesgos_ext.columns else []
+                    # Inversión aprobada por Cynthia (2026-06-22): empleabilidad y satisfacción
+                    # son indicadores "buenos" (más alto = mejor). El riesgo externo es su
+                    # COMPLEMENTO: desempleo=100-empleabilidad, insatisfacción=100-satisfacción,
+                    # riesgo_externo = promedio de ambos. Las columnas crudas NO cambian de
+                    # nombre ni de valor; solo cambia el cálculo interno (igual que calcular_ispg.py).
+                    emp = pd.to_numeric(riesgos_ext['empleabilidad'], errors='coerce')
+                    sat = pd.to_numeric(riesgos_ext['satisfacción'], errors='coerce')
+                    max_raw = pd.concat([emp, sat]).max(skipna=True)
+                    if pd.notna(max_raw) and max_raw <= 1:
+                        emp = emp * 100
+                        sat = sat * 100
+                    riesgos_ext['riesgo_externo'] = ((100 - emp) + (100 - sat)) / 2
+                # Escalar riesgos a 0-100 si están en 0-1 (las tres variables del ISPG deben
+                # estar en la misma escala 0-100, igual que en calcular_ispg.py).
+                if 'riesgo_interno' in riesgos_int.columns:
+                    max_int = riesgos_int['riesgo_interno'].max(skipna=True)
+                    if pd.notna(max_int) and max_int <= 1:
+                        riesgos_int['riesgo_interno'] = riesgos_int['riesgo_interno'] * 100
+                if 'riesgo_externo' in riesgos_ext.columns:
+                    max_ext = riesgos_ext['riesgo_externo'].max(skipna=True)
+                    if pd.notna(max_ext) and max_ext <= 1:
+                        riesgos_ext['riesgo_externo'] = riesgos_ext['riesgo_externo'] * 100
+                # Riesgo externo global: PROMEDIO de los últimos 5 períodos con datos reales.
+                # FIX H3 (aprobado por Cynthia): se seleccionan los PERÍODOS que existen en los datos
+                # de riesgo externo (no las cohortes), se ordenan y se toman los últimos 5; si hay menos
+                # de 5 períodos con datos, se usan los que existan. Antes se usaban las 5 cohortes más
+                # recientes (sin egresados) → riesgo_externo vacío → 0.
+                if 'riesgo_externo' in riesgos_ext.columns and 'Periodo' in riesgos_ext.columns:
+                    periodos_con_datos = sorted(riesgos_ext.loc[riesgos_ext['riesgo_externo'].notna(), 'Periodo'].unique())
+                    periodos_ultimos_5 = periodos_con_datos[-5:]
+                    valores_ultimos_5 = riesgos_ext[riesgos_ext['Periodo'].isin(periodos_ultimos_5)]['riesgo_externo'].dropna()
+                else:
+                    valores_ultimos_5 = pd.Series(dtype=float)
                 if len(valores_ultimos_5) > 0:
-                    riesgo_ext_global = float(np.median(valores_ultimos_5))
+                    riesgo_ext_global = float(np.mean(valores_ultimos_5))
                 else:
                     riesgo_ext_global = 0
                 riesgo_int_cohorte = riesgos_int.groupby('ID_Cohorte')['riesgo_interno'].mean()
                 resumenes_final = []
                 for idx, row in resumen_df.iterrows():
                     cohorte = row['ID_Cohorte']
-                    beg = row['BEG']/100 if row['BEG'] > 1 else row['BEG']
+                    # Fórmula corregida (aprobada por Cynthia, 2026-06-22): las tres variables
+                    # están en escala 0-100. ISPG_raw = SUMA ponderada y el indicador final
+                    # que se guarda como "ISPG" es la Salud del sistema = 100 - ISPG_raw.
+                    beg = row['BEG']
                     riesgo_int = riesgo_int_cohorte.get(cohorte, 0)
                     riesgo_ext = riesgo_ext_global
-                    ispg = 0.50*beg - 0.30*riesgo_int - 0.20*riesgo_ext
-                    ispg_norm = max(0, min(1, ispg))
-                    if ispg_norm >= 0.75:
+                    ispg_raw = 0.50*beg + 0.30*riesgo_int + 0.20*riesgo_ext
+                    ispg = 100 - ispg_raw  # Salud del sistema (lo que se reporta como ISPG)
+                    ispg_norm = max(0, min(100, ispg))
+                    if ispg_norm >= 75:
                         clasificacion = 'Verde'
-                    elif ispg_norm >= 0.60:
+                    elif ispg_norm >= 60:
                         clasificacion = 'Amarillo'
                     else:
                         clasificacion = 'Rojo'
