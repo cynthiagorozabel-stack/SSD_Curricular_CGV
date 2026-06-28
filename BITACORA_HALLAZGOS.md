@@ -212,3 +212,44 @@ Cuando un perfil se calcula con **una sola** de las competencias que lo componen
 3. **Dejarlo como está:** aceptar "logro parcial con los datos disponibles".
 
 No se aplica ningún cambio de código hasta que Cynthia decida.
+
+---
+
+## Verificación: catálogo real materia→RA (Industrial, malla 2019)
+
+**Fecha:** 2026-06-27
+**Rama:** `feat/catalogo-real-industrial` (basada en `feat/streamlit-simulador`)
+**Estado:** **VERIFICADO** — sin cambios de datos ni de código.
+
+### Hallazgo
+El archivo `MATRIZ-ASIGNATURAS_INDUSTRIAL.xlsx` **no existe** en el repositorio ni en
+el sistema de archivos (búsqueda en todo `/`, incluidos `Documents/`, `Downloads/`,
+`Desktop/` y discos externos: no hay ningún `.xlsx`). No obstante, el **catálogo real
+materia→RA ya existe** y está vivo en el proyecto:
+
+- Archivo: `ssd_core/config/asignaturas.csv`
+- Carrera: `COD_CARRERA = INGIND1719` → **INGENIERIA INDUSTRIAL**, malla/rediseño **2019**
+  (consistente con `ssd_core/config/dim_ra.csv`, carrera 103 / INDUSTRIAL 2019).
+
+### Cobertura verificada
+- Filas de datos totales: **55** (56 líneas − cabecera).
+- Filas excluidas (sin sufijo `(A19)` → prácticas y vinculación): **5**
+  (`PPP01`, `VINC1`, `PPP02`, `VINC2`, `PPP03`).
+- Mapeos válidos materia→RA (con `(A19)`): **50**.
+
+### Equivalencia de columnas
+La petición original pedía `NIVEL`, `MATERIA_MALLA`, `RA`. En `asignaturas.csv`:
+
+| Pedido          | Columna real        |
+| --------------- | ------------------- |
+| `NIVEL`         | `NIVEL`             |
+| `MATERIA_MALLA` | `NOMBRE_ASIGNATURA` |
+| `RA`            | `RA`                |
+
+El sufijo `(A19)` que distingue las materias de malla de las prácticas/vinculación
+vive en `NOMBRE_ASIGNATURA` (≡ `MATERIA_MALLA`).
+
+### Conclusión
+No se genera un CSV duplicado en `ssd_core/data/`. La fuente única de verdad del
+catálogo real materia→RA de Industrial es `ssd_core/config/asignaturas.csv`. **No se
+toca `main.py` ni ningún módulo del pipeline.**
