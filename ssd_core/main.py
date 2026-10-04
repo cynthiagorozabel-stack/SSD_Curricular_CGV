@@ -67,15 +67,8 @@ def main(carrera_id):
         riesgos_internos['ID_EST'] = 'NA'
     riesgos_externos = DataLoader(riesgos_externos_path).load()
 
-    # Engines
-    ra_engine = RAEngine(ra_data)
-    competencia_engine = CompetenciaEngine(competencia_data, ra_data)
-    competencia_results = competencia_engine.calculate(student_id=None)
-    perfil_engine = PerfilEngine(perfil_data, competencia_results)
-    perfil_results = perfil_engine.calculate()
     external_risk_engine = ExternalRiskEngine(riesgos_externos)
     internal_risk_engine = InternalRiskEngine(riesgos_internos)
-    # Eliminados: beg_engine, ispg_engine, normalizacion_engine (no se usan)
 
     # Validaciones (solo Cronbach sobre la matriz de logros)
     sensibilidad = None
@@ -92,61 +85,41 @@ def main(carrera_id):
     # Exportar logros individuales (RA, competencia, perfil, riesgos internos)
     # =====================
     import numpy as np
-    # Cargar datos necesarios
     matric = pd.read_csv('ssd_core/config/matriculacion_historica_test.csv')
     asig = pd.read_csv('ssd_core/config/asignaturas.csv')
     comp_perfil = pd.read_csv('ssd_core/config/competencia_perfil.csv')
-    # Homologar columnas de ID y asignaturas
-    matric = matric.rename(columns={'Estudiante_ID':'ID_EST', 'Materia':'COD_ASIGNATURA'})
-    comp_perfil = comp_perfil.rename(columns={'competencia_id': 'ID_COMP'})
-    # Mapear materias a RA
-    materia_ra = asig.set_index('COD_ASIGNATURA')['RA'].to_dict()
-    matric['RA'] = matric['COD_ASIGNATURA'].map(materia_ra)
-    # Filtrar solo filas con RA válido y nota numérica
-    matric = matric[matric['RA'].notnull() & matric['Nota'].apply(lambda x: str(x).replace('.','',1).isdigit())]
-    matric['Nota'] = matric['Nota'].astype(float)
-    # Calcular nivel de logro por estudiante y RA (promedio de notas)
-    ra_logro = matric.groupby(['ID_EST','RA']).agg({'Nota':'mean'}).reset_index()
-    ra_logro = ra_logro.rename(columns={'Nota':'Logro_RA'})
-    ra_logro['Fecha_corte'] = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-    # Agregar ID_Cohorte y Nivel a ra_logro
-    id_cohorte_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict()
-    nivel_map = matric.drop_duplicates('ID_EST').set_index('ID_EST')['Nivel'].to_dict() if 'Nivel' in matric.columns else {}
-    ra_logro['ID_Cohorte'] = ra_logro['ID_EST'].map(id_cohorte_map)
-    ra_logro['Nivel'] = ra_logro['ID_EST'].map(nivel_map) if nivel_map else ''
-    # Calcular logro de competencia por estudiante
-    comp_logro = []
-    for est in ra_logro['ID_EST'].unique():
-        est_ra = ra_logro[ra_logro['ID_EST']==est]
-        for comp in comp_perfil['ID_COMP'].unique():
-            # Buscar todos los RA asociados a esta competencia
-            ra_asociados = asig[(asig['RA'].notnull()) & (asig['RA'].str.startswith('RA')) & (asig['RA'].isin(est_ra['RA']))]['RA'].unique().tolist()
-            ra_vals = est_ra[est_ra['RA'].isin(ra_asociados)]['Logro_RA']
-            if not ra_vals.empty:
-                comp_logro.append({'ID_EST':est, 'ID_COMP':comp, 'Logro_Competencia':ra_vals.mean(), 'Fecha_corte':pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'), 'ID_Cohorte': id_cohorte_map.get(est, ''), 'Nivel': nivel_map.get(est, '') if nivel_map else ''})
-    comp_logro = pd.DataFrame(comp_logro)
-    # Calcular perfil por estudiante y periodo (suma ponderada de competencias)
-    # Extraer nivel y periodo desde matriculacion_historica_test.csv
-    perfil_logro = []
-    for (est, periodo), grupo_m in matric.groupby(['ID_EST', 'Periodo']):
-        nivel = grupo_m['Nivel'].iloc[0] if 'Nivel' in grupo_m.columns else ''
-        id_cohorte = grupo_m['ID_Cohorte'].iloc[0] if 'ID_Cohorte' in grupo_m.columns else ''
-        # Calcular logros de competencia para este estudiante y periodo
-        est_comp = comp_logro[comp_logro['ID_EST'] == est]
-        for perfil in comp_perfil['perfil_id'].unique():
-            compas = comp_perfil[comp_perfil['perfil_id'] == perfil]['ID_COMP']
-            vals = est_comp[est_comp['ID_COMP'].isin(compas)]['Logro_Competencia']
-            if not vals.empty:
-                perfil_logro.append({
-                    'ID_EST': est,
-                    'ID_PERFIL': perfil,
-                    'Periodo': periodo,
-                    'Nivel': nivel,
-                    'ID_Cohorte': id_cohorte,
-                    'Logro_Perfil': vals.mean(),
-                    'Fecha_corte': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
-                })
-    perfil_logro = pd.DataFrame(perfil_logro)
+    matric = matric.rename(columns={'Estudiante_ID': 'ID_EST', 'Materia': 'COD_ASIGNATURA'})
+    fecha_corte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+    ra_engine = RAEngine(asig)
+    ra_logro = ra_engine.calculate(matric, fecha_corte=fecha_corte)
+    competencia_engine = CompetenciaEngine(ra_data)
+    comp_logro = competencia_engine.calculate(ra_logro, fecha_corte=fecha_corte)
+    if 'Periodo' in matric.columns:
+        student_meta = matric.copy()
+        student_meta['Periodo_orden'] = student_meta['Periodo'].astype(str)
+        student_meta = student_meta.sort_values(['ID_EST', 'Periodo_orden']).drop_duplicates('ID_EST', keep='last')
+    else:
+        student_meta = matric.drop_duplicates('ID_EST')
+    perfil_engine = PerfilEngine(comp_perfil)
+    perfil_logro = perfil_engine.calculate(
+        comp_logro, student_meta=student_meta, fecha_corte=fecha_corte
+    )
+    competencia_results = (
+        comp_logro.groupby('ID_COMP')['Logro_Competencia'].mean().to_dict()
+        if not comp_logro.empty else {}
+    )
+    perfil_results = (
+        perfil_logro.groupby('ID_PERFIL')['Logro_Perfil'].mean().to_dict()
+        if not perfil_logro.empty else {}
+    )
+    id_cohorte_map = (
+        matric.drop_duplicates('ID_EST').set_index('ID_EST')['ID_Cohorte'].to_dict()
+        if 'ID_Cohorte' in matric.columns else {}
+    )
+    nivel_map = (
+        matric.drop_duplicates('ID_EST').set_index('ID_EST')['Nivel'].to_dict()
+        if 'Nivel' in matric.columns else {}
+    )
 
     # Calcular PERFIL_Promedio único por estudiante: solo el último periodo y nivel más alto
     if not perfil_logro.empty:
@@ -202,7 +175,7 @@ def main(carrera_id):
     ra_export.to_csv('export/ra_logro_individual.csv', index=False)
 
     # Exportar competencia_logro_individual con ID_Cohorte
-    comp_cols = ['ID_EST', 'ID_COMP', 'Logro_Competencia', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
+    comp_cols = ['ID_EST', 'ID_COMP', 'Logro_Competencia', 'ra_limitante', 'Fecha_corte', 'ID_Cohorte', 'Nivel']
     comp_export = comp_logro[comp_cols] if all(col in comp_logro.columns for col in comp_cols) else comp_logro
     comp_export.to_csv('export/competencia_logro_individual.csv', index=False)
     perfil_logro.to_csv('export/perfil_logro_individual.csv', index=False)
@@ -374,7 +347,7 @@ def main(carrera_id):
             'valor': valor,
             'fuente': 'competencia_perfil.csv',
             'fuente_detallada': 'Declaración de ponderaciones RA en competencia',
-            'formula': 'Suma ponderada de RA: sum(PESO_RA_EN_COMPETENCIA * valor_minimo)',
+            'formula': 'Mínimo de Logro_RA entre los RA mapeados en ra_competencia.csv (no compensatorio)',
             'timestamp_export': timestamp_export,
             'run_id': run_id,
             'version_modelo': version_modelo
@@ -394,7 +367,7 @@ def main(carrera_id):
             'valor': valor,
             'fuente': 'competencia_perfil.csv',
             'fuente_detallada': 'Declaración de ponderaciones de competencias en perfil',
-            'formula': 'Suma ponderada de competencias: sum(peso * valor_competencia)',
+            'formula': 'Suma ponderada de competencias: sum(peso * Logro_Competencia) / sum(peso)',
             'timestamp_export': timestamp_export,
             'run_id': run_id,
             'version_modelo': version_modelo
